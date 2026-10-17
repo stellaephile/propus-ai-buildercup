@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "time_budget_ms": 8000,
+  "questions": [
+    {"id": "worst_wards", "question": "Which wards have the worst transit access?",
+     "tools": ["find_underserved_areas"], "kinds": ["data_table", "map_layer", "stat_cards"]},
+    {"id": "compare", "question": "Compare transit access in Kashmere Gate vs Sangam Vihar",
+     "tools": ["compare_transit_access"], "kinds": ["comparison", "map_layer"]},
+    {"id": "catchment", "question": "Show the 500m catchment for Kashmere Gate",
+     "tools": ["get_metro_catchment"], "kinds": ["map_layer", "stat_cards"]},
+    {"id": "rank_bus_stops", "question": "Rank the best-served wards by bus stops",
+     "tools": ["get_ward_density_ranking"], "kinds": ["bar_chart", "map_layer"]},
+    {"id": "scenario", "question": "If a metro station is added in Sangam Vihar, how many more people fall within 800m?",
+     "tools": ["simulate_network_change"], "kinds": ["data_table"]},
+    {"id": "heat", "question": "Which busy stops are on the hottest surfaces in Delhi?",
+     "tools": ["stop_heat_exposure"], "kinds": ["stat_cards", "data_table", "map_layer"]},
+    {"id": "coverage_gap", "question": "Where do people live far from any bus stop or metro station?",
+     "tools": ["coverage_gap"], "kinds": ["stat_cards", "data_table", "map_layer"]},
+    {"id": "refusal_air_quality", "question": "What is the air quality in Dwarka?",
+     "tools": [], "kinds": ["stat_cards"], "refusal": true},
+    {"id": "worst_wards_rephrased", "question": "Which parts of Delhi are worst served by public transport?",
+     "tools": ["find_underserved_areas"], "kinds": ["data_table", "map_layer", "stat_cards"]},
+    {"id": "heat_rephrased", "question": "Which stops with lots of daily trips are on very hot ground?",
+     "tools": ["stop_heat_exposure"], "kinds": ["stat_cards", "data_table", "map_layer"]}
+  ]
+}

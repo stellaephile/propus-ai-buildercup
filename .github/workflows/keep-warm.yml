@@ -1,12 +1,14 @@
-name: Keep Render backend warm
+name: Keep Cloud Run warm and watch the live URL
 
-# CLAUDE.md §5.5: Render's free tier sleeps after ~15 min idle, and this
-# backend's cold start (google-adk pulling sqlalchemy + litellm on top of
-# psycopg2) has been observed to exceed 60 seconds — worse than a bare
-# FastAPI app. A ping every 10 minutes keeps the instance from ever fully
-# sleeping during normal hours, so a live demo never has to sit through a
-# cold start at all. Manual dispatch lets you force a wake-up right before
-# walking into a pitch, independent of the schedule.
+# Both Cloud Run services run with min-instances=1, so they should never be
+# cold; this ping is a second guard and, more usefully, an alarm: if the live
+# URL stops answering for the whole retry window, the run goes red and GitHub
+# emails the repository owner. That matters most during the judging period.
+#
+# The URLs are repository variables, not files, so they never land in the repo:
+#   gh variable set API_URL --body "https://<api service url>"
+#   gh variable set WEB_URL --body "https://<web service url>"
+# Manual dispatch forces a check right before a demo.
 
 "on":
   schedule:
@@ -16,20 +18,29 @@ name: Keep Render backend warm
 jobs:
   ping:
     runs-on: ubuntu-latest
+    env:
+      API_URL: ${{ vars.API_URL }}
+      WEB_URL: ${{ vars.WEB_URL }}
     steps:
-      - name: Hit /health
+      - name: Check API health and web page
         run: |
-          set -x
-          # Generous timeout: the ping itself may BE the wake-up call on a
-          # cold instance, so give it room to actually finish booting rather
-          # than timing out and reporting a false failure.
-          if curl -fsS -m 90 -w '\nHTTP %{http_code} in %{time_total}s\n' \
-               "${{ vars.RENDER_API_URL || 'https://propus-ai.onrender.com' }}/health"; then
-            echo "backend responded"
-          else
-            # Don't fail the workflow red over one missed tick — Render can
-            # occasionally be genuinely slow/redeploying, and the next run
-            # 10 minutes later will retry. A red workflow here would just be
-            # noise, not something actionable at 3am.
-            echo "::warning::backend did not respond within 90s — will retry next scheduled run"
+          if [ -z "$API_URL" ] || [ -z "$WEB_URL" ]; then
+            echo "::error::Set the API_URL and WEB_URL repository variables (see the comment at the top of this file)."
+            exit 1
           fi
+          check() {
+            name="$1"; url="$2"
+            for attempt in 1 2 3; do
+              if curl -fsS -m 30 -o /dev/null -w "$name: HTTP %{http_code} in %{time_total}s\n" "$url"; then
+                return 0
+              fi
+              echo "$name: attempt $attempt failed"
+              sleep 10
+            done
+            echo "::error::$name did not answer after 3 attempts"
+            return 1
+          }
+          status=0
+          check "API /health" "${API_URL%/}/health" || status=1
+          check "Web /" "${WEB_URL%/}/" || status=1
+          exit $status

@@ -402,6 +402,18 @@ TOOL ROUTING:
 - "Search for stop named [x]"          → semantic_stop_search(query_text)
 - "Show full Delhi map"                → get_urban_stress_map()
 
+GROUNDING RULES (never break these):
+- Every number you state must come from a tool result in THIS conversation. Never
+  estimate, round up from memory, or use outside knowledge for a figure.
+- Report the tool's "method" line in one short sentence when it gives one.
+- Heat values are Landsat LAND SURFACE temperature, a relative indicator - not air
+  temperature or felt heat. Say so when you report them.
+- If a question needs data no tool has (air quality, ridership counts, income,
+  felt heat/UTCI, shade or shelter inventory, anything outside Delhi bus/metro
+  access, population coverage and stop surface heat), do NOT call a tool and do NOT
+  guess: say in ONE plain sentence that Propus does not have that data.
+- Coordinates in a result are shown on the map; do not repeat them in prose.
+
 EQUITY FRAMING: Always prefer stops_per_10k over raw counts when available.
 Note when RS metrics (ndvi_mean, ndbi_mean) are NULL — means the RS pipeline
 hasn't run yet for that ward, and urban_stress_index is transit-only.
@@ -1390,6 +1402,11 @@ Routing:
 - "tell me about [area]"             → get_ward_rs_profile
 - "what area is at lat/lon?"         → reverse_geocode
 - "where is [area]? / coordinates"   → geocode_neighbourhood
+
+Rules: every number must come from a tool result - never estimate or use outside
+knowledge. Heat is land SURFACE temperature (relative), not air temperature.
+If no tool has the data (air quality, ridership, income, felt heat), call NO tool
+and say in one plain sentence that Propus does not have that data.
 """
 
 

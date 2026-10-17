@@ -45,7 +45,7 @@ log = logging.getLogger(__name__)
 # `uvicorn main:app` from inside apps/api/). Try relative first, fall back
 # to absolute — do this for every same-package import in this file.
 try:
-    from .formatters import METHODOLOGY, format_tool_response
+    from .formatters import METHODOLOGY, format_refusal, format_tool_response
     from .schemas import (
         BarChartResult,
         BarSeriesPoint,
@@ -59,7 +59,7 @@ try:
         StatCardsResult,
     )
 except ImportError:
-    from formatters import METHODOLOGY, format_tool_response
+    from formatters import METHODOLOGY, format_refusal, format_tool_response
     from schemas import (
         BarChartResult,
         BarSeriesPoint,
@@ -176,12 +176,13 @@ async def _stream_query(message: str, session_id: str, user_id: str, mode: str):
     tier = classify_complexity(message)
     runner, model_used = get_runner(tier)
     if runner is None:
-        yield _sse(ErrorEvent(message="Agent unavailable (check DATABASE_URL / GOOGLE_API_KEY)", recoverable=False))
+        yield _sse(ErrorEvent(message="Propus is not available right now. Please try again shortly.", recoverable=False))
         return
 
     yield _sse(ReasoningStepEvent(step="Analysing your question..."))
 
     accumulated: list[tuple] = []  # (PropusResult, methodology|None)
+    final_text: list[str] = []  # the model's last text turn (used only for refusals)
 
     async def _run_agent(active_runner):
         """Stream the agent loop, appending formatted results to `accumulated`
@@ -192,6 +193,8 @@ async def _stream_query(message: str, session_id: str, user_id: str, mode: str):
             from agent import run_query_events
 
         async for event in run_query_events(message, session_id, user_id, active_runner):
+            if event.is_final_response() and event.content and event.content.parts:
+                final_text[:] = [event.content.parts[0].text or ""]
             for call in event.get_function_calls():
                 yield _sse(ReasoningStepEvent(step=f"Calling {call.name}..."))
 
@@ -204,7 +207,8 @@ async def _stream_query(message: str, session_id: str, user_id: str, mode: str):
                 except Exception as fmt_exc:
                     log.error(f"Formatter error for {tool_name}: {fmt_exc}", exc_info=True)
                     results = [StatCardsResult(cards=[
-                        StatCard(label="Formatting error", value=str(fmt_exc), evidence="Calculated", alert=True)
+                        StatCard(label="Could not display this result", value="Something went wrong building this result. Try the question again.",
+                                 evidence="Calculated", alert=True)
                     ])]
                 methodology = METHODOLOGY.get(tool_name)
                 for r in results:
@@ -269,10 +273,8 @@ async def _stream_query(message: str, session_id: str, user_id: str, mode: str):
                 raise
 
         if not accumulated:
-            accumulated.append((
-                StatCardsResult(cards=[StatCard(label="No results", value="Try rephrasing your question", evidence="Observed")]),
-                None,
-            ))
+            for r in format_refusal(final_text[0] if final_text else None):
+                accumulated.append((r, None))
 
         yield _sse(PlanEvent(kinds=[r.kind for r, _ in accumulated]))
         for i, (result, methodology) in enumerate(accumulated):
@@ -283,7 +285,7 @@ async def _stream_query(message: str, session_id: str, user_id: str, mode: str):
 
     except Exception as exc:
         log.error(f"Query stream error: {exc}", exc_info=True)
-        yield _sse(ErrorEvent(message=str(exc), recoverable=True))
+        yield _sse(ErrorEvent(message="Propus could not finish this analysis. Please try again.", recoverable=True))
 
 
 @app.post("/query/stream")

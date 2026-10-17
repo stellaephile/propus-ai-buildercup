@@ -831,6 +831,22 @@ METHODOLOGY: dict[str, Methodology] = {
 }
 
 
+REFUSAL_FALLBACK = (
+    "Propus does not have data to answer that. It covers Delhi bus and metro access, "
+    "population beyond walking distance, and surface heat at stops."
+)
+
+
+def format_refusal(text: str | None) -> list[PropusResult]:
+    """Typed result for a turn where the model called no tool (docs/DECISIONS.md D6,
+    CLAUDE.md §6: never stream free text). The model's sentence is shown only if it
+    carries no digits - numbers must come from tools - otherwise a fixed message."""
+    clean = " ".join((text or "").split())
+    if not clean or any(ch.isdigit() for ch in clean) or len(clean) > 280:
+        clean = REFUSAL_FALLBACK
+    return [StatCardsResult(cards=[StatCard(label="Not available in Propus data", value=clean, evidence="Observed")])]
+
+
 def format_tool_response(tool_name: str, response: Any, args: dict) -> list[PropusResult]:
     if not isinstance(response, dict):
         response = {"value": response}

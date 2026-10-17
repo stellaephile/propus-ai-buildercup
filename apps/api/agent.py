@@ -154,6 +154,12 @@ def get_engine():
                 "see db/roles.sql)"
             )
             db_url = os.environ["DATABASE_URL"]
+        # The image ships psycopg2 only. A "postgresql+psycopg://" (psycopg 3)
+        # URL would make SQLAlchemy import a driver that is not installed, so
+        # pin whichever spelling the secret uses to the installed driver.
+        for prefix in ("postgresql+psycopg://", "postgres://"):
+            if db_url.startswith(prefix):
+                db_url = "postgresql://" + db_url[len(prefix):]
         _engine = create_engine(
             db_url,
             pool_pre_ping=True,

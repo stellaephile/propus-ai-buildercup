@@ -75,7 +75,7 @@ except ImportError:
         StatCardsResult,
     )
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
+DATABASE_URL = os.environ.get("AGENT_DATABASE_URL") or os.environ.get("DATABASE_URL", "")
 _runners: dict[str, tuple] = {}  # tier -> (runner, model_name)
 
 

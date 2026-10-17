@@ -2,7 +2,7 @@
 # Deploy Propus to Cloud Run: API first, then the web app (which needs the API URL
 # at build time). Creates billable resources in the chosen project.
 #
-#   ./deploy/cloudrun.sh <gcp-project-id> [region]
+#   ./deploy/cloudrun.sh <gcp-project-id> [region] [api]   # 'api' skips the web rebuild
 #
 # Prerequisites (one-off, see docs/DEPLOY_GCP.md):
 #   - APIs enabled: run, cloudbuild, artifactregistry, aiplatform, firestore, secretmanager
@@ -49,6 +49,8 @@ gcloud run deploy propus-api --project "${PROJECT}" --region "${REGION}" \
   --set-env-vars "GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=${PROJECT},GOOGLE_CLOUD_LOCATION=${VERTEX_LOCATION},QUERY_LOG_COLLECTION=query_log" \
   --set-secrets "AGENT_DATABASE_URL=propus-agent-database-url:latest"
 API_URL="$(gcloud run services describe propus-api --project "${PROJECT}" --region "${REGION}" --format 'value(status.url)')"
+
+if [[ "${3:-all}" == "api" ]]; then echo "API only: ${API_URL}/health"; exit 0; fi
 
 echo "== Web (API: ${API_URL})"
 gcloud builds submit --project "${PROJECT}" --config deploy/cloudbuild.yaml \

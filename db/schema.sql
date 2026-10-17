@@ -421,3 +421,46 @@ CREATE TABLE IF NOT EXISTS embeddings.stop_embeddings (
     context   TEXT,
     embedding VECTOR(3072)   -- verify dimension against a real embed_content() response before first load
 );
+
+-- ============================================================================
+-- Sustainability module (AI Builder Cup 2026) — coverage_gap / stop_heat_exposure
+-- See docs/DECISIONS.md D6–D11. All three tables are precomputed offline.
+-- ============================================================================
+
+-- One row per physical transit access point: bus = derived.stop_clusters
+-- physical_stop_id (de-double-counted), metro = gtfs_metro.stops station.
+-- trips_day = scheduled trips calling there in the GTFS feed (not ridership).
+-- Written by pipeline/load_pop_cells.py.
+CREATE TABLE IF NOT EXISTS derived.transit_points (
+    point_id  TEXT PRIMARY KEY,                -- 'bus:<physical_stop_id>' | 'metro:<stop_id>'
+    mode      TEXT NOT NULL CHECK (mode IN ('bus', 'metro')),
+    name      TEXT NOT NULL,
+    trips_day INTEGER NOT NULL DEFAULT 0,
+    geom      GEOMETRY(POINT, 4326) NOT NULL,  -- served
+    geom_utm  GEOMETRY(POINT, 32643) NOT NULL  -- distance math
+);
+CREATE INDEX IF NOT EXISTS idx_transit_points_utm  ON derived.transit_points USING GIST (geom_utm);
+CREATE INDEX IF NOT EXISTS idx_transit_points_mode ON derived.transit_points (mode);
+
+-- WorldPop India 2020 constrained 100 m, one point per populated cell centre
+-- inside the union of public.wards. Straight-line distance to the nearest
+-- transit point per mode, in EPSG:32643 (Estimated: WorldPop is modelled).
+-- Written by pipeline/load_pop_cells.py.
+CREATE TABLE IF NOT EXISTS derived.pop_cells (
+    cell_id      INTEGER PRIMARY KEY,
+    pop          REAL NOT NULL,
+    geom         GEOMETRY(POINT, 4326) NOT NULL,
+    geom_utm     GEOMETRY(POINT, 32643) NOT NULL,
+    dist_bus_m   REAL,
+    dist_metro_m REAL,
+    dist_any_m   REAL
+);
+CREATE INDEX IF NOT EXISTS idx_pop_cells_utm ON derived.pop_cells USING GIST (geom_utm);
+
+-- Landsat 8/9 C2 L2 summer (Apr–Jun 2023–25) median land surface temperature,
+-- mean within 100 m of each transit point. LST, not air temperature; NULL when
+-- no clear pixel. Written by pipeline/stop_heat_ee.py.
+CREATE TABLE IF NOT EXISTS derived.stop_heat (
+    point_id TEXT PRIMARY KEY REFERENCES derived.transit_points(point_id) ON DELETE CASCADE,
+    lst_c    REAL
+);

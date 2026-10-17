@@ -32,7 +32,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
@@ -104,6 +104,10 @@ async def lifespan(app: FastAPI):
     log.info("Propus API shutting down.")
 
 
+# Comma-separated list of allowed web origins, set at deploy time to the web
+# service URL. Unset (local dev) falls back to "*".
+_CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()] or ["*"]
+
 app = FastAPI(
     title="Propus Delhi Transit Intelligence API",
     version="2.0.0",
@@ -114,16 +118,29 @@ app = FastAPI(
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # restrict in production
+    allow_origins=_CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
+_ID_PATTERN = r"^[A-Za-z0-9_.:-]+$"
+
+
 class QueryRequest(BaseModel):
-    message: str = Field(..., description="User's natural language question")
-    session_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: str = Field(default="web_user")
+    # Bounds keep a bad or hostile request from reaching the model: an empty
+    # question, a 1 MB paste, or an id that is really a payload.
+    message: str = Field(..., min_length=1, max_length=500, description="User's natural language question")
+    session_id: str = Field(default_factory=lambda: str(uuid.uuid4()), min_length=1, max_length=64, pattern=_ID_PATTERN)
+    user_id: str = Field(default="web_user", min_length=1, max_length=64, pattern=_ID_PATTERN)
+
+    @field_validator("message")
+    @classmethod
+    def _message_not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("message must not be blank")
+        return v
 
 
 @app.get("/health")

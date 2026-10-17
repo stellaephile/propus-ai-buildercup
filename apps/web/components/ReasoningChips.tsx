@@ -107,13 +107,12 @@ export function ReasoningChips({
           animate={{ opacity: 1, y: 0 }}
           transition={motionTokens.spring}
           className="w-full mt-1.5 rounded-md border border-alert bg-sheet px-3 py-2 text-sm text-alertInk flex items-center justify-between gap-3"
-          role="alert"
         >
           <span>{failedMessage}</span>
           {onRetry && (
             <button
               onClick={onRetry}
-              className="shrink-0 rounded-sm border border-alert px-2 py-0.5 text-xs font-mono font-medium hover:bg-alert/10 transition-colors"
+              className="shrink-0 min-h-[32px] rounded-sm border border-alert px-3 text-xs font-mono font-medium hover:bg-alert/10 transition-colors"
             >
               Retry
             </button>

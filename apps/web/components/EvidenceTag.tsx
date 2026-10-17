@@ -22,6 +22,7 @@
  */
 
 import type { Evidence } from "@propus/contract";
+import { EVIDENCE_MEANING } from "@/lib/glossary";
 
 const styles: Record<Evidence, string> = {
   Observed: "text-primary border-primary/50 bg-primary/10",
@@ -34,9 +35,11 @@ export function EvidenceTag({ evidence }: { evidence: Evidence }) {
   return (
     <span
       className={`inline-block font-mono text-xs leading-none tracking-wide uppercase border rounded-sm px-1 py-0.5 align-middle ${styles[evidence]}`}
-      title={`Evidence class: ${evidence}`}
+      title={`${evidence}: ${EVIDENCE_MEANING[evidence]}`}
     >
       {evidence}
+      {/* title is mouse-only; this puts the meaning in the accessible name too */}
+      <span className="sr-only">. {EVIDENCE_MEANING[evidence]}</span>
     </span>
   );
 }

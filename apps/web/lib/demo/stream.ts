@@ -61,8 +61,13 @@ export async function* liveStream(
   if (!res.ok || !res.body) {
     yield {
       event: "error",
-      message: `Agent unreachable (HTTP ${res.status}). Demo mode still works.`,
-      recoverable: true,
+      message:
+        res.status === 422
+          ? "That question could not be read. Try shorter, simpler wording."
+          : res.status === 429
+            ? "Too many questions at once. Wait a few seconds and try again."
+            : `The analysis service is not responding (HTTP ${res.status}).`,
+      recoverable: res.status !== 422,
     };
     return;
   }
@@ -88,4 +93,63 @@ export async function* liveStream(
       }
     }
   }
+}
+
+/** Longest a live answer may take before the recorded one is shown instead. */
+const LIVE_TIMEOUT_MS = 45_000;
+
+/**
+ * Live stream with a recorded safety net (CLAUDE.md §5.2: a model or network
+ * outage must not kill the demo). If the live agent fails, times out or is
+ * unreachable BEFORE any result has been shown, and a recorded answer exists
+ * for this question, replay that answer instead. The chip and the closing
+ * `done` event say "demo", so it is never passed off as a live answer.
+ * After a result has been shown, a failure stays a failure.
+ */
+export async function* liveWithFallback(
+  apiUrl: string,
+  query: string,
+  built: BuiltQuery,
+  opts: { signal: AbortSignal; reducedMotion?: boolean; timeoutMs?: number }
+): AsyncGenerator<PropusEvent> {
+  const inner = new AbortController();
+  const relay = () => inner.abort();
+  opts.signal.addEventListener("abort", relay);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    inner.abort();
+  }, opts.timeoutMs ?? LIVE_TIMEOUT_MS);
+
+  let sawResult = false;
+  let failure: string | null = null;
+  try {
+    for await (const ev of liveStream(apiUrl, query, inner.signal)) {
+      if (ev.event === "result") sawResult = true;
+      if (ev.event === "error" && !sawResult) {
+        failure = ev.message;
+        break;
+      }
+      yield ev;
+    }
+  } catch {
+    if (opts.signal.aborted) return; // replaced by a newer question
+    failure = timedOut
+      ? "The analysis took too long."
+      : "Could not reach the analysis service.";
+  } finally {
+    clearTimeout(timer);
+    opts.signal.removeEventListener("abort", relay);
+  }
+
+  if (failure === null) return;
+  if (sawResult || built.results.length === 0) {
+    yield { event: "error", message: failure, recoverable: true };
+    return;
+  }
+  yield {
+    event: "reasoning_step",
+    step: "The live agent is unavailable, so this is the recorded answer.",
+  };
+  yield* replay(built, { reducedMotion: opts.reducedMotion });
 }

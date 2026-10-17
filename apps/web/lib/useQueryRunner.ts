@@ -20,7 +20,8 @@ import {
   classify,
   type QueryIntent,
 } from "./demo/queries";
-import { liveStream, replay } from "./demo/stream";
+import { APP_MODE } from "./mode";
+import { liveWithFallback, replay } from "./demo/stream";
 import type { StopsData } from "./data/useStopsData";
 
 export interface RenderedResult {
@@ -94,17 +95,39 @@ export function useQueryRunner({
   const reduced = !!useReducedMotion();
   const runSeq = useRef(0);
   const lastQuery = useRef<string | null>(null);
+  const inflight = useRef<AbortController | null>(null);
+  const busy = useRef(false);
 
   const run = useCallback(
     async (query: string) => {
+      // A double-click or a repeated Enter must not send the same question twice.
+      // (Scenario questions re-run on purpose when a point is picked on the map.)
+      if (busy.current && lastQuery.current === query && classify(query) !== "scenario") return;
       onQueryStart?.();
       const seq = ++runSeq.current;
       lastQuery.current = query;
+      busy.current = true;
+      // A newer question cancels the one still in flight, so the server stops
+      // working on an answer nobody will read.
+      inflight.current?.abort();
+      const ac = new AbortController();
+      inflight.current = ac;
       const intent = classify(query);
-      const mode =
-        (process.env.NEXT_PUBLIC_MODE === "live" && process.env.NEXT_PUBLIC_API_URL
-          ? "live"
-          : "demo") as "demo" | "live";
+      const mode = APP_MODE;
+
+      const built =
+        intent === "worst_wards"
+          ? buildWorstWards(wards)
+          : intent === "comparison"
+            ? buildComparison(wards)
+            : intent === "catchment"
+              ? buildCatchment(stops)
+              : intent === "density_rank"
+                ? buildDensityRank()
+                : intent === "scenario"
+                  ? buildScenario(stops, scenarioPoint, 800)
+                  : buildUnknown();
+
 
       // Archive the prior turn's cards before resetting so evidence accumulates
       // rather than being silently replaced (§8.1 Scene 5, BUGS.md B3).
@@ -129,25 +152,23 @@ export function useQueryRunner({
           intent,
           mode,
           startedAt: performance.now(),
+          // Optimistic: show the answer's silhouette and a first chip at once,
+          // so a slow or cold backend never leaves a blank pane. The server's
+          // own plan and steps replace these as they arrive.
+          plan: mode === "live" ? built.results.map((r) => r.payload.kind) : [],
+          chips:
+            mode === "live"
+              ? [{ step: "Sending your question...", state: "active" as const }]
+              : [],
         };
       });
 
-      const built =
-        intent === "worst_wards"
-          ? buildWorstWards(wards)
-          : intent === "comparison"
-            ? buildComparison(wards)
-            : intent === "catchment"
-              ? buildCatchment(stops)
-              : intent === "density_rank"
-                ? buildDensityRank()
-                : intent === "scenario"
-                  ? buildScenario(stops, scenarioPoint, 800)
-                  : buildUnknown();
-
       const stream =
         mode === "live"
-          ? liveStream(process.env.NEXT_PUBLIC_API_URL as string, query)
+          ? liveWithFallback(process.env.NEXT_PUBLIC_API_URL as string, query, built, {
+              signal: ac.signal,
+              reducedMotion: reduced,
+            })
           : replay(built, { reducedMotion: reduced });
 
       let sawResult = false;
@@ -238,6 +259,8 @@ export function useQueryRunner({
             i === s.chips.length - 1 ? { ...c, state: "failed" as const } : c
           ),
         }));
+      } finally {
+        if (runSeq.current === seq) busy.current = false;
       }
     },
     [stops, wards, scenarioPoint, onMapLayer, onQueryStart, reduced]

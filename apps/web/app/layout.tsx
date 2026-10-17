@@ -27,7 +27,7 @@ const mono = Martian_Mono({
 export const metadata: Metadata = {
   title: "Propus AI - Ask the city a question",
   description:
-    "Natural-language spatial analysis over Delhi transit and remote-sensing data. Real geometry, stated CRS, provenance on every number.",
+    "Ask questions about Delhi's buses and metro in plain English. Real map data, and every number shows its source.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -47,6 +47,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <ThemeProvider>
+          <a
+            href="#propus-query"
+            className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[10000] focus:rounded-sm focus:bg-celestial focus:px-3 focus:py-2 focus:text-sm focus:text-onCelestial"
+          >
+            Skip to the question box
+          </a>
           {children}
           <MatteGrain />
           <InstrumentCursor />

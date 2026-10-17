@@ -41,6 +41,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import math
 import os
 import random
 import re
@@ -351,7 +352,10 @@ known wards:
   address, not one of the 290 MCD wards) → geocode_location(query) as a
   last resort via Google's Geocoding API, then call get_nearby_stops(lat,
   lon) on the result. Never say "location not found" without trying
-  geocode_neighbourhood first, then geocode_location.
+  geocode_neighbourhood first, then geocode_location. Always state the
+  returned precision: "approximate area" is a locality centre, not the exact
+  place. If ambiguous is true, name the alternatives and confirm. Never pass
+  coordinates to geocode_location; use reverse_geocode.
 
 When a user mentions an area name:
 1. ALWAYS call get_ward_rs_profile(area_name) first — it uses LIKE matching
@@ -484,6 +488,12 @@ def reverse_geocode(lat: float, lon: float, buffer_m: int = 200) -> dict:
         (0 for exact). error if nothing is within buffer_m of any ward —
         the point is genuinely outside Delhi's 290 mapped wards.
     """
+    if not (math.isfinite(lat) and math.isfinite(lon)):
+        return {"error": "Latitude and longitude must be real numbers."}
+    # Delhi is near 28.6 N, 77.2 E; a swapped pair or a stray value lands far outside.
+    if not (28.40 <= lat <= 28.88 and 76.84 <= lon <= 77.35):
+        return {"error": f"({lat}, {lon}) is outside Delhi. Latitude comes first; Delhi is near 28.6 N, 77.2 E."}
+    buffer_m = min(max(int(buffer_m), 0), 2000)
     try:
         rows = _q(
             "SELECT * FROM fn_reverse_geocode(:lon, :lat, :buf)",
@@ -565,57 +575,123 @@ def geocode_neighbourhood(name: str) -> dict:
     return out
 
 
-def geocode_location(query: str) -> dict:
-    """Geocode an arbitrary Delhi place name/address via Google's Geocoding
-    API — fallback for landmarks and street addresses that aren't one of the
-    290 MCD wards. Try geocode_neighbourhood first; it's free, exact, and
-    grounded in this DB's own ward polygons.
+# Google location_type -> plain-language precision, so the caller never
+# presents a locality centre as if it were the place itself.
+_GEOCODE_PRECISION = {
+    "ROOFTOP": "exact address",
+    "RANGE_INTERPOLATED": "street segment (interpolated)",
+    "GEOMETRIC_CENTER": "place or street (centre point)",
+    "APPROXIMATE": "approximate area (centre of a locality, not a specific place)",
+}
+# A hit whose only meaning is the whole city/state/country is Google's
+# fallback for an unmatched query, never a real answer.
+_GEOCODE_TOO_COARSE = {"administrative_area_level_1", "administrative_area_level_2", "country"}
+_COORDINATE_QUERY = re.compile(r"^\s*-?\d+(\.\d+)?\s*[,\s]\s*-?\d+(\.\d+)?\s*$")
+
+
+def _google_geocode(query: str, api_key: str) -> dict:
+    """Blocking HTTP call; run it with asyncio.to_thread, never on the loop."""
+    import json
+    import urllib.parse
+    import urllib.request
+
+    params = urllib.parse.urlencode({
+        "address": f"{query}, Delhi, India",
+        "bounds": "28.40,76.84|28.88,77.35",       # SW|NE, a bias only
+        "components": "administrative_area:Delhi|country:IN",  # a hard filter
+        "key": api_key,
+    })
+    with urllib.request.urlopen(
+        f"https://maps.googleapis.com/maps/api/geocode/json?{params}", timeout=5
+    ) as resp:
+        return json.loads(resp.read().decode())
+
+
+async def geocode_location(query: str) -> dict:
+    """Geocode a Delhi landmark or street address via Google's Geocoding API.
+    Fallback for places that are not one of the 290 MCD wards; try
+    geocode_neighbourhood first (free, exact, grounded in this DB's polygons).
 
     Args:
-        query: Place name or address to geocode (e.g. 'Lajpat Nagar, Delhi').
+        query: Place name or address (e.g. 'Lajpat Nagar', 'Kashmere Gate
+            metro station'). Not coordinates; use reverse_geocode for those.
 
     Returns:
-        lat, lon, formatted_address on success; error on failure or if the
-        result falls outside Delhi.
+        lat, lon, formatted_address, location_type and precision. ALWAYS tell
+        the user the precision: 'approximate area' means a locality centre,
+        not the exact place. ambiguous=true with other_matches means several
+        places fit; confirm which one. partial_match=true means Google matched
+        only part of the query; show formatted_address and confirm. ward_id/ward_name give the containing
+        MCD ward, or null when the point is outside the mapped wards (for
+        example NDMC or Cantonment areas). error when nothing reliable matched.
     """
-    import json
-    import urllib.request
-    import urllib.parse
+    query = (query or "").strip()
+    if not query:
+        return {"error": "Empty query. Ask the user which place they mean."}
+    if _COORDINATE_QUERY.match(query):
+        return {"error": "That looks like coordinates. Use reverse_geocode(lat, lon) instead."}
 
     api_key = os.environ.get("GOOGLE_MAPS_API_KEY", "")
     if not api_key:
         return {"error": "GOOGLE_MAPS_API_KEY not configured"}
 
-    # Delhi bounding box: SW 28.40,76.84 — NE 28.88,77.35
-    bounds = "28.40,76.84|28.88,77.35"
-    params = urllib.parse.urlencode({
-        "address": f"{query}, Delhi, India",
-        "bounds": bounds,
-        "key": api_key,
-    })
-    url = f"https://maps.googleapis.com/maps/api/geocode/json?{params}"
-
     try:
-        with urllib.request.urlopen(url, timeout=5) as resp:
-            data = json.loads(resp.read().decode())
+        data = await asyncio.to_thread(_google_geocode, query, api_key)
     except Exception as exc:
-        return {"error": f"Geocoding request failed: {exc}"}
+        # Type only: some urllib errors carry the request URL, which holds the key.
+        return {"error": f"Geocoding request failed ({type(exc).__name__})"}
 
-    if data.get("status") != "OK" or not data.get("results"):
-        return {"error": f"Geocoding returned status={data.get('status')} for '{query}'"}
+    status, results = data.get("status"), data.get("results") or []
+    if status == "ZERO_RESULTS" or (status == "OK" and not results):
+        return {"error": f"No place found for '{query}' in Delhi."}
+    if status != "OK":
+        return {"error": f"Geocoding returned status={status} for '{query}'"}
 
-    loc = data["results"][0]["geometry"]["location"]
+    top = results[0]
+    if _GEOCODE_TOO_COARSE & set(top.get("types", [])):
+        return {"error": f"'{query}' resolved only to a whole city or region, not a place. "
+                         "Ask the user for a more specific place."}
+    # The components filter is not enforced by Google, and Noida / Faridabad
+    # fall inside Delhi's bounding box, so require Delhi in the address itself.
+    if not any("administrative_area_level_1" in c.get("types", []) and c.get("long_name") == "Delhi"
+               for c in top.get("address_components", [])):
+        return {"error": f"'{query}' resolved to '{top.get('formatted_address', '')}', "
+                         "which is outside Delhi."}
+
+    loc = top["geometry"]["location"]
     lat, lon = loc["lat"], loc["lng"]
-
-    # Validate result is within Delhi bbox
+    # Backstop for the components filter: Delhi's bounding box.
     if not (28.40 <= lat <= 28.88 and 76.84 <= lon <= 77.35):
         return {"error": f"Geocoded location ({lat}, {lon}) is outside Delhi bounds"}
 
-    return {
-        "lat": lat,
-        "lon": lon,
-        "formatted_address": data["results"][0].get("formatted_address", ""),
+    loc_type = top["geometry"].get("location_type", "APPROXIMATE")
+    out = {
+        "lat": round(lat, 6),
+        "lon": round(lon, 6),
+        "formatted_address": top.get("formatted_address", ""),
+        "location_type": loc_type,
+        "precision": _GEOCODE_PRECISION.get(loc_type, loc_type),
+        "ambiguous": len(results) > 1,
+        "partial_match": bool(top.get("partial_match")),
     }
+    if len(results) > 1:
+        out["other_matches"] = [r.get("formatted_address", "") for r in results[1:4]]
+
+    # Ward is informational: NDMC and Cantonment land is outside the MCD
+    # wards, so a miss here must not reject an otherwise valid place.
+    try:
+        ward = await asyncio.to_thread(reverse_geocode, lat, lon, 100)
+    except Exception as exc:
+        log.warning(f"geocode_location ward lookup failed: {type(exc).__name__}")
+        ward = {"error": "ward lookup unavailable"}
+    if "error" in ward:
+        out.update(ward_id=None, ward_name=None,
+                   note="Point is outside the mapped MCD wards (e.g. NDMC or Cantonment) "
+                        "or the ward lookup was unavailable.")
+    else:
+        out.update(ward_id=ward["ward_id"], ward_name=ward["ward_name"],
+                   ward_match_type=ward["match_type"])
+    return out
 
 
 def find_underserved_areas(

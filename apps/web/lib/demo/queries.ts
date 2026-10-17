@@ -42,6 +42,43 @@ export const HEADLINE_QUERIES = [
   "If a metro station is added here, what falls within 800m?",
 ] as const;
 
+/** One plain-language line per example: what the question actually shows. */
+export const HEADLINE_GISTS: Record<(typeof HEADLINE_QUERIES)[number], string> = {
+  "Which wards have the worst transit access?":
+    "Ranks wards by a transit access score, so you see where service is thinnest.",
+  "Compare transit access in Kashmere Gate vs Sangam Vihar":
+    "Two areas side by side, with how much better one is served than the other.",
+  "Show the 500m catchment for Kashmere Gate":
+    "Draws the 500 m walking zone around a stop and counts what falls inside.",
+  "Rank the best-served wards by bus stops":
+    "A ranked chart of the wards with the most bus stops.",
+  "If a metro station is added here, what falls within 800m?":
+    "A what-if: drop a station on the map and see how many stops come within reach.",
+};
+
+/** Live mode only: these call the agent's sustainability tools, which the recorded demo cannot replay. */
+export const LIVE_EXAMPLES: { q: string; gist: string }[] = [
+  {
+    q: "Which busy stops are on the hottest surfaces in Delhi?",
+    gist: "Satellite surface temperature at the busiest stops. A heat-exposure check, not air temperature.",
+  },
+  {
+    q: "Where do people live far from any bus stop or metro station?",
+    gist: "Population beyond walking distance of any stop: the biggest service gaps.",
+  },
+  {
+    q: "What is the air quality in Dwarka?",
+    gist: "Outside its data on purpose. Watch it decline instead of guessing.",
+  },
+];
+
+/** Three questions for the landing page: a transit one first, then whatever this build can really answer. */
+export function landingExamples(live: boolean): string[] {
+  return live
+    ? [HEADLINE_QUERIES[0], LIVE_EXAMPLES[0].q, LIVE_EXAMPLES[1].q]
+    : [HEADLINE_QUERIES[0], HEADLINE_QUERIES[1], HEADLINE_QUERIES[2]];
+}
+
 export function classify(q: string): QueryIntent {
   const s = q.toLowerCase();
   if (/(worst|underserved|poor|gap).*(ward|access)|ward.*worst/.test(s)) return "worst_wards";

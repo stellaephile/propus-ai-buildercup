@@ -8,6 +8,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { motionTokens } from "@/lib/tokens";
+import { HelpDialog } from "./HelpDialog";
 import { ThemeToggle } from "./ThemeToggle";
 
 export function TopBar({ mode }: { mode: "demo" | "live" }) {
@@ -35,17 +36,21 @@ export function TopBar({ mode }: { mode: "demo" | "live" }) {
               : "Live agent"
           }
         >
-          {mode}
+          {mode === "demo" ? "Recorded demo" : "Live agent"}
         </span>
         <ThemeToggle className="text-onCelestialMuted hover:text-onCelestial" />
-        {/* plain anchor, not next/link — keeps the DS component free of the
+        <HelpDialog className="text-onCelestialMuted hover:text-onCelestial" />
+        {/* the design kit is a developer page; keep it out of the shipped chrome.
+            Plain anchor, not next/link — keeps the DS component free of the
             Next client runtime (design-sync bundles it standalone) */}
-        <a
-          href="/kit"
-          className="font-mono text-xs text-onCelestialMuted hover:text-onCelestial"
-        >
-          /kit
-        </a>
+        {process.env.NODE_ENV !== "production" && (
+          <a
+            href="/kit"
+            className="font-mono text-xs text-onCelestialMuted hover:text-onCelestial"
+          >
+            /kit
+          </a>
+        )}
       </div>
     </motion.header>
   );

@@ -27,6 +27,8 @@ export function QueryInput({
   const [value, setValue] = useState("");
   const [ghostText, setGhostText] = useState(ghost ? HEADLINE_QUERIES[0] : "");
   const inputRef = useRef<HTMLInputElement>(null);
+  // which headline query the ghost text is typing, so an empty Enter submits all of it
+  const ghostIndex = useRef(0);
 
   // cycling ghost typewriter — landing only, never while the user has typed
   useEffect(() => {
@@ -37,6 +39,7 @@ export function QueryInput({
     let t: ReturnType<typeof setTimeout>;
     const tick = () => {
       const q = HEADLINE_QUERIES[qi % HEADLINE_QUERIES.length];
+      ghostIndex.current = qi % HEADLINE_QUERIES.length;
       if (!deleting) {
         ci++;
         setGhostText(q.slice(0, ci));
@@ -59,7 +62,7 @@ export function QueryInput({
   }, [ghost, reduced]);
 
   const submit = () => {
-    const q = value.trim() || (ghost ? ghostText.trim() : "");
+    const q = value.trim() || (ghost ? HEADLINE_QUERIES[ghostIndex.current] : "");
     if (q) onSubmit(q);
     setValue("");
   };
@@ -85,6 +88,8 @@ export function QueryInput({
         )}
         <input
           ref={inputRef}
+          id="propus-query"
+          maxLength={500}
           type="text"
           value={value}
           disabled={disabled}
@@ -101,7 +106,7 @@ export function QueryInput({
         transition={motionTokens.spring}
         onClick={submit}
         disabled={disabled}
-        className="shrink-0 rounded-md bg-celestial text-onCelestial text-sm font-medium px-3.5 py-1.5 transition-colors hover:bg-primaryInk disabled:opacity-50 disabled:hover:bg-celestial"
+        className="shrink-0 rounded-md bg-celestial text-onCelestial text-sm font-medium px-3.5 min-h-[36px] transition-colors hover:bg-primaryInk disabled:opacity-50 disabled:hover:bg-celestial"
       >
         Analyse
       </motion.button>

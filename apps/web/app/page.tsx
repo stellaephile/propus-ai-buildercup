@@ -14,6 +14,9 @@ import type { MapRef } from "react-map-gl/maplibre";
 import type { PropusResult } from "@propus/contract";
 import { ChatPane } from "@/components/ChatPane";
 import { ChatPaneToggle } from "@/components/ChatPaneToggle";
+import { HelpDialog } from "@/components/HelpDialog";
+import { APP_MODE } from "@/lib/mode";
+import { landingExamples } from "@/lib/demo/queries";
 import { QueryInput } from "@/components/QueryInput";
 import { TopBar } from "@/components/TopBar";
 import { ProofStrip } from "@/components/landing/ProofStrip";
@@ -421,8 +424,9 @@ export default function Page() {
                     transition={{ ...motionTokens.spring, delay: reduced ? 0 : 0.35 }}
                     className="mt-3 text-inkMuted text-base md:text-lg"
                   >
-                    Natural-language spatial analysis over Delhi&apos;s transit network — real
-                    geometry, stated CRS, provenance on every number.
+                    Ask about Delhi&apos;s buses and metro in plain English. See which
+                    neighbourhoods are poorly served, who lives far from a stop, and which stops
+                    sit on the hottest ground. Every number shows where it came from.
                   </motion.p>
                   <motion.div
                     initial={reduced ? false : { opacity: 0, y: 8 }}
@@ -431,6 +435,27 @@ export default function Page() {
                     className="mt-6"
                   >
                     <QueryInput onSubmit={submit} ghost autoFocus />
+                    <p className="mt-3 text-sm text-inkMuted">Not sure what to ask? Try one:</p>
+                    <ul className="mt-1">
+                      {landingExamples(APP_MODE === "live").map((q) => (
+                        <li key={q}>
+                          <button
+                            type="button"
+                            onClick={() => submit(q)}
+                            className="flex min-h-[36px] items-center gap-2 rounded-sm px-2 text-left text-sm text-celestialMuted hover:bg-vellumShade hover:text-celestial"
+                          >
+                            <span className="font-mono text-primary" aria-hidden>
+                              ▸
+                            </span>
+                            {q}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <HelpDialog
+                      label="New here? How to read the results"
+                      className="-ml-2 mt-1 text-celestialMuted hover:text-celestial"
+                    />
                   </motion.div>
                   <motion.div
                     initial={reduced ? false : { opacity: 0 }}

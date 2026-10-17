@@ -1,0 +1,19 @@
+# ── FastAPI backend ──────────────────────────────────────────────────────────
+# NOTE: fastapi/pydantic versions are floors, not exact pins — google-adk
+# requires fastapi>=0.133 and pydantic>=2.12, so they can't stay pinned to
+# the older exact versions this file previously had (0.111.0 / 2.7.1) without
+# a dependency conflict that breaks `pip install -r` entirely.
+fastapi>=0.133,<1
+uvicorn[standard]>=0.34,<1
+pydantic>=2.12,<3
+python-dotenv==1.0.1
+httpx>=0.27,<1
+
+# ── Agent (apps/api/agent.py) ────────────────────────────────────────────────
+# Previously missing from this file despite being imported at module load —
+# `pip install -r requirements.txt` alone could never actually start the API
+# (would fail on `import google.adk` / `import sqlalchemy`). google-adk[db]
+# pulls sqlalchemy; [extensions] pulls litellm (needed for the Groq/LiteLLM
+# simple-tier models — see MODEL_CHAIN/SIMPLE_MODEL_CHAIN in agent.py).
+google-adk[db,extensions]>=2.8,<3
+psycopg2-binary==2.9.12

@@ -1,0 +1,295 @@
+"""
+apps/api/main.py
+-----------------
+FastAPI layer for Propus — typed result contract (CLAUDE.md §6/§6a).
+
+Endpoints:
+    POST /query/stream   — SSE stream of typed PropusEvent for a live query
+    GET  /query/demo      — hardcoded PropusResult[] (B1 round-trip proof,
+                             no DB/LLM required)
+    GET  /health          — health check
+
+The frontend never renders from raw SQL or raw agent text: every response
+is a typed PropusResult, produced by apps/api/formatters.py from the
+existing ADK agent's tool outputs (apps/api/agent.py).
+
+Usage:
+    uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import time
+import uuid
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+log = logging.getLogger(__name__)
+
+# Import style must work whether this module is loaded as part of the
+# `apps.api` package (local dev: `uvicorn apps.api.main:app` from repo
+# root — see docs/RUNNING.md) or as a top-level module (some hosts start
+# `uvicorn main:app` from inside apps/api/). Try relative first, fall back
+# to absolute — do this for every same-package import in this file.
+try:
+    from .formatters import METHODOLOGY, format_tool_response
+    from .schemas import (
+        BarChartResult,
+        BarSeriesPoint,
+        DataTableResult,
+        DoneEvent,
+        ErrorEvent,
+        PlanEvent,
+        ReasoningStepEvent,
+        ResultEvent,
+        StatCard,
+        StatCardsResult,
+    )
+except ImportError:
+    from formatters import METHODOLOGY, format_tool_response
+    from schemas import (
+        BarChartResult,
+        BarSeriesPoint,
+        DataTableResult,
+        DoneEvent,
+        ErrorEvent,
+        PlanEvent,
+        ReasoningStepEvent,
+        ResultEvent,
+        StatCard,
+        StatCardsResult,
+    )
+
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+_runners: dict[str, tuple] = {}  # tier -> (runner, model_name)
+
+
+def get_runner(tier: str = "advanced"):
+    """One cached runner per tier: 'simple' → open-source via Groq,
+    'advanced' → Gemini (see agent.MODEL_CHAIN / SIMPLE_MODEL_CHAIN)."""
+    if tier not in _runners:
+        try:
+            try:
+                from .agent import create_runner, pick_model
+            except ImportError:
+                from agent import create_runner, pick_model
+            model = pick_model(tier)
+            _runners[tier] = (create_runner(model=model, tier=tier), model)
+            log.info(f"Agent initialized — tier={tier} model={model}")
+        except Exception as e:
+            log.error(f"Failed to initialize agent (tier={tier}): {e}")
+            return None, None
+    return _runners[tier]
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    log.info("Propus API starting up...")
+    yield
+    log.info("Propus API shutting down.")
+
+
+app = FastAPI(
+    title="Propus Delhi Transit Intelligence API",
+    version="2.0.0",
+    description="Typed-result agent API over Delhi GTFS + PostGIS data (CLAUDE.md §6)",
+    lifespan=lifespan,
+)
+
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # restrict in production
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+class QueryRequest(BaseModel):
+    message: str = Field(..., description="User's natural language question")
+    session_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str = Field(default="web_user")
+
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "ok",
+        "service": "propus-api",
+        "database": "configured" if DATABASE_URL else "not configured",
+        "version": "2.0.0",
+    }
+
+
+# ---------------------------------------------------------------------------
+# B1 round-trip proof — hardcoded, no DB/LLM dependency
+# ---------------------------------------------------------------------------
+
+@app.get("/query/demo")
+async def query_demo():
+    """A hardcoded data_table PropusResult — proves the contract round-trips
+    API → frontend without needing a live DB or LLM (TASKS.md B1 DoD)."""
+    result = DataTableResult(
+        columns=["Ward", "Bus Stops", "Transit Score"],
+        rows=[
+            ["SANGAM VIHAR", 0, 0.0],
+            ["TIGRI", 0, 0.0],
+            ["KASHMERE GATE", 110, 0.6842],
+        ],
+        evidence="Observed",
+        alertRows=[0, 1],
+        rowIds=["ward_sangam_vihar", "ward_tigri", "ward_kashmere_gate"],
+    )
+    return {"kind": result.kind, "result": result.model_dump(mode="json")}
+
+
+# ---------------------------------------------------------------------------
+# Typed SSE stream
+# ---------------------------------------------------------------------------
+
+def _sse(event: BaseModel) -> str:
+    return f"data: {json.dumps(event.model_dump(mode='json'))}\n\n"
+
+
+async def _stream_query(message: str, session_id: str, user_id: str, mode: str):
+    start = time.monotonic()
+    query_id = str(uuid.uuid4())
+
+    try:
+        from .agent import classify_complexity, _is_rate_limit
+    except ImportError:
+        from agent import classify_complexity, _is_rate_limit
+
+    tier = classify_complexity(message)
+    runner, model_used = get_runner(tier)
+    if runner is None:
+        yield _sse(ErrorEvent(message="Agent unavailable (check DATABASE_URL / GOOGLE_API_KEY)", recoverable=False))
+        return
+
+    yield _sse(ReasoningStepEvent(step="Analysing your question..."))
+
+    accumulated: list[tuple] = []  # (PropusResult, methodology|None)
+
+    async def _run_agent(active_runner):
+        """Stream the agent loop, appending formatted results to `accumulated`
+        and yielding reasoning-step SSE frames."""
+        try:
+            from .agent import run_query_events
+        except ImportError:
+            from agent import run_query_events
+
+        async for event in run_query_events(message, session_id, user_id, active_runner):
+            for call in event.get_function_calls():
+                yield _sse(ReasoningStepEvent(step=f"Calling {call.name}..."))
+
+            for resp in event.get_function_responses():
+                tool_name = resp.name
+                tool_response = resp.response
+                args = getattr(resp, "args", None) or {}
+                try:
+                    results = format_tool_response(tool_name, tool_response, args)
+                except Exception as fmt_exc:
+                    log.error(f"Formatter error for {tool_name}: {fmt_exc}", exc_info=True)
+                    results = [StatCardsResult(cards=[
+                        StatCard(label="Formatting error", value=str(fmt_exc), evidence="Calculated", alert=True)
+                    ])]
+                methodology = METHODOLOGY.get(tool_name)
+                for r in results:
+                    accumulated.append((r, methodology))
+                yield _sse(ReasoningStepEvent(step=f"{tool_name} → {len(results)} result(s)"))
+
+    async def _run_advanced_with_fallback(skip_model: str | None = None):
+        """Walk agent.MODEL_CHAIN, only moving to the next model on a
+        retriable error (429/quota/503/UNAVAILABLE/overloaded — see
+        agent._is_rate_limit). A real bug in the query still surfaces
+        immediately instead of being masked by five silent retries.
+        `skip_model` avoids re-trying a model that was already attempted
+        and just failed (e.g. the initial advanced-tier runner)."""
+        try:
+            from .agent import MODEL_CHAIN, create_runner
+        except ImportError:
+            from agent import MODEL_CHAIN, create_runner
+
+        nonlocal model_used
+        last_exc = None
+        for model in MODEL_CHAIN:
+            if model == skip_model:
+                continue
+            try:
+                fallback_runner = create_runner(model=model, tier="advanced")
+                async for frame in _run_agent(fallback_runner):
+                    yield frame
+                model_used = model
+                _runners["advanced"] = (fallback_runner, model)  # cache the model that worked
+                return
+            except Exception as exc:
+                last_exc = exc
+                if accumulated or not _is_rate_limit(exc):
+                    raise
+                log.warning(f"{model} unavailable ({exc}) — trying next model in chain")
+                yield _sse(ReasoningStepEvent(step=f"{model} unavailable, trying next model..."))
+        raise last_exc
+
+    try:
+        try:
+            async for frame in _run_agent(runner):
+                yield frame
+        except Exception as oss_exc:
+            if accumulated:
+                # Typed results are already computed from real tool calls —
+                # a failed summary turn must never discard them.
+                log.warning(f"Model failed after results were computed ({oss_exc}) — shipping results")
+            elif tier == "simple":
+                # An open-source-tier failure must not kill the query:
+                # escalate to the Gemini chain (with its own fallback).
+                log.warning(f"Simple-tier model failed ({oss_exc}) — escalating to Gemini")
+                yield _sse(ReasoningStepEvent(step="Escalating to a larger model..."))
+                async for frame in _run_advanced_with_fallback():
+                    yield frame
+            elif _is_rate_limit(oss_exc):
+                # Initial advanced-tier attempt hit a retriable error —
+                # walk the rest of the Gemini chain instead of failing.
+                log.warning(f"{model_used} unavailable ({oss_exc}) — trying next model in chain")
+                async for frame in _run_advanced_with_fallback(skip_model=model_used):
+                    yield frame
+            else:
+                raise
+
+        if not accumulated:
+            accumulated.append((
+                StatCardsResult(cards=[StatCard(label="No results", value="Try rephrasing your question", evidence="Observed")]),
+                None,
+            ))
+
+        yield _sse(PlanEvent(kinds=[r.kind for r, _ in accumulated]))
+        for i, (result, methodology) in enumerate(accumulated):
+            yield _sse(ResultEvent(index=i, payload=result, methodology=methodology))
+
+        ms = int((time.monotonic() - start) * 1000)
+        yield _sse(DoneEvent(query_id=query_id, ms=ms, mode=mode, model=model_used))
+
+    except Exception as exc:
+        log.error(f"Query stream error: {exc}", exc_info=True)
+        yield _sse(ErrorEvent(message=str(exc), recoverable=True))
+
+
+@app.post("/query/stream")
+async def query_stream(req: QueryRequest):
+    return StreamingResponse(
+        _stream_query(req.message, req.session_id, req.user_id, mode="live"),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

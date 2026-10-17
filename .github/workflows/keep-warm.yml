@@ -1,0 +1,35 @@
+name: Keep Render backend warm
+
+# CLAUDE.md §5.5: Render's free tier sleeps after ~15 min idle, and this
+# backend's cold start (google-adk pulling sqlalchemy + litellm on top of
+# psycopg2) has been observed to exceed 60 seconds — worse than a bare
+# FastAPI app. A ping every 10 minutes keeps the instance from ever fully
+# sleeping during normal hours, so a live demo never has to sit through a
+# cold start at all. Manual dispatch lets you force a wake-up right before
+# walking into a pitch, independent of the schedule.
+
+"on":
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit /health
+        run: |
+          set -x
+          # Generous timeout: the ping itself may BE the wake-up call on a
+          # cold instance, so give it room to actually finish booting rather
+          # than timing out and reporting a false failure.
+          if curl -fsS -m 90 -w '\nHTTP %{http_code} in %{time_total}s\n' \
+               "${{ vars.RENDER_API_URL || 'https://propus-ai.onrender.com' }}/health"; then
+            echo "backend responded"
+          else
+            # Don't fail the workflow red over one missed tick — Render can
+            # occasionally be genuinely slow/redeploying, and the next run
+            # 10 minutes later will retry. A red workflow here would just be
+            # noise, not something actionable at 3am.
+            echo "::warning::backend did not respond within 90s — will retry next scheduled run"
+          fi

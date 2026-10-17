@@ -1,0 +1,165 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* All color values come from lib/tokens.ts. Tailwind utilities read the
+   `--color-*` channels; light/dark values are injected by lib/theme.tsx
+   (:root and [data-theme="dark"]). This file only sets structural defaults
+   plus retinting for MapLibre's own chrome, which isn't Tailwind-styled. */
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-vellum text-ink font-sans antialiased;
+}
+
+/* Accessible focus — visible ring everywhere, token color (§3.7). Uses the CSS
+   var directly (not theme()) so it retints with the theme. */
+:focus-visible {
+  outline: 2px solid rgb(var(--color-focusRing));
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* MapLibre control restyle to tokens */
+.maplibregl-ctrl-scale {
+  @apply font-mono text-xs text-inkMuted bg-vellum/80 border-borderStrong;
+}
+.maplibregl-ctrl-attrib {
+  @apply font-sans text-xs bg-vellum/80 text-inkMuted;
+}
+.maplibregl-ctrl-attrib a {
+  @apply text-inkMuted;
+}
+.maplibregl-popup-content {
+  /* §1.4: popovers get the one sanctioned ambient shadow, not a hard drop (M4) */
+  @apply bg-sheet text-ink border border-border rounded-md shadow-ambient p-0;
+}
+/* North-indicator (§9) — MapView.tsx inlines the ACTUAL public/icons/
+   north-arrow.svg file at runtime (fetched, unmodified markup). That file
+   bakes its background and detail shading as literal white/black fills with
+   no alpha, so it can't float transparently or retint as an <img> on its
+   own. These rules target its exact literal fill values, unmodified, so the
+   real file renders transparent (white → gone) and theme-colored
+   (black → currentColor, set per-theme via the `ink` token in MapView.tsx). */
+.propus-north-arrow svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.propus-north-arrow path[fill="rgb(255,255,255)"] {
+  fill: transparent;
+}
+.propus-north-arrow path[fill="rgb(0,0,0)"] {
+  fill: currentColor;
+}
+
+.maplibregl-popup-close-button {
+  @apply text-inkMuted text-base px-1.5;
+}
+
+/* right-click "copy coordinates" tooltip (Google Maps convention): inverted
+   per theme — dark navy chip on the light basemap, light cream chip on the
+   dark basemap — using the fixed colour pair (not the theme-resolved
+   `celestial` token, which goes near-black in dark mode and would blend
+   into the Dark Matter basemap). The button inside carries the actual
+   bg/text/border colours (JS has `isDark`); this only styles the popup
+   chrome around it, so the tip arrow matches. */
+.propus-coord-popup .maplibregl-popup-content {
+  @apply border-0 shadow-ambient rounded-md;
+  background: transparent;
+}
+.propus-coord-popup .maplibregl-popup-tip {
+  border-top-color: #0d1c2e;
+  border-bottom-color: #0d1c2e;
+}
+[data-theme="dark"] .propus-coord-popup .maplibregl-popup-tip {
+  border-top-color: #f3efe6;
+  border-bottom-color: #f3efe6;
+}
+
+/* Night Chart (§7): MapLibre ships white nav buttons and black glyphs baked as
+   background SVGs — invisible on a dark basemap. Retint the button surfaces to
+   the sheet token and invert the glyphs so zoom/compass stay legible. The popup
+   tip is a CSS triangle whose visible edge takes the content background. */
+[data-theme="dark"] .maplibregl-ctrl-group {
+  background: rgb(var(--color-sheet));
+  border: 1px solid rgb(var(--color-borderStrong));
+}
+[data-theme="dark"] .maplibregl-ctrl-group button + button {
+  border-top-color: rgb(var(--color-borderStrong));
+}
+[data-theme="dark"] .maplibregl-ctrl-group button {
+  background-color: transparent;
+}
+[data-theme="dark"] .maplibregl-ctrl-group button:hover {
+  background-color: rgb(var(--color-vellumDeep));
+}
+[data-theme="dark"] .maplibregl-ctrl button .maplibregl-ctrl-icon {
+  filter: invert(1) brightness(1.4);
+}
+[data-theme="dark"] .maplibregl-popup-tip {
+  border-top-color: rgb(var(--color-sheet));
+  border-bottom-color: rgb(var(--color-sheet));
+}
+
+/* Matte finish (TASKS.md Phase M) — the whole app reads as a matte print.
+   The grain overlay (components/MatteGrain.tsx) is static, pointer-transparent,
+   and low-opacity enough that every AA contrast pair still passes beneath it;
+   opacity comes from matteTokens via --matte-grain-opacity (per-theme). It is
+   removed entirely for prefers-contrast users and for print. */
+.matte-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 9000; /* above app chrome, below the instrument cursor (9999) */
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  opacity: var(--matte-grain-opacity);
+}
+@media (prefers-contrast: more), print {
+  .matte-grain {
+    display: none;
+  }
+}
+
+/* Reduced motion: kill CSS transitions globally; Framer handles its own via
+   useReducedMotion. (§6b rules) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Instrument cursor (components/InstrumentCursor.tsx) — hide the native
+   cursor on fine pointers while the reticle is mounted. Text fields keep the
+   native I-beam (the reticle hides itself over them). */
+@media (pointer: fine) {
+  html.instrument-cursor,
+  html.instrument-cursor * {
+    cursor: none !important;
+  }
+  html.instrument-cursor textarea,
+  html.instrument-cursor [contenteditable="true"],
+  html.instrument-cursor input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]) {
+    cursor: text !important;
+  }
+}
+
+/* Ghost caret for the landing input cycling text */
+@keyframes propus-caret {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.ghost-caret {
+  animation: propus-caret 1s step-end infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ghost-caret { animation: none; }
+}

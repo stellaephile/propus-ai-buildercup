@@ -1,0 +1,88 @@
+.env
+.venv
+
+# node / frontend
+node_modules/
+.next/
+apps/web/next-env.d.ts
+#apps/web/public/fixtures/
+*.tsbuildinfo
+
+# python build artifacts
+__pycache__/
+*.pyc
+
+.DS_Store
+
+data/validation_report.txt
+data/processed/shape_match_report.csv
+
+data/worldpop/*
+
+pipeline/__pycache__data/
+/data/
+cloud-sql-proxy
+*.mp4
+# ...but the startup backdrop is a shipped app asset, not raw media: without
+# this the splash video never reaches Vercel and production silently falls back
+# to the procedural field. 2.1 MB, inside the ~5MB fixture budget (§10).
+!apps/web/public/splash/*.mp4
+*.pages
+supabase.md
+docs/ATLAS.md
+docs/BUGS.md
+docs/CARES.md
+docs/DESIGN.md
+docs/GOLDEN_QUERIES.md
+docs/ROADMAP.md
+docs/SPRINT.md
+docs/TASKS.md
+
+# design-sync (claude.ai/design) machine state — durable inputs in .design-sync/ ARE committed
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
+apps/web/styles/ds-tailwind.css
+apps/web/styles/ds-sync.css
+.design-sync/config.json
+.design-sync/conventions.md
+.design-sync/NOTES.md
+.design-sync/previews/BarChartCard.tsx
+.design-sync/previews/Comparison.tsx
+.design-sync/previews/CountUp.tsx
+.design-sync/previews/DataTable.tsx
+.design-sync/previews/EvidenceTag.tsx
+.design-sync/previews/LineChartCard.tsx
+.design-sync/previews/MapLayerCard.tsx
+.design-sync/previews/ProofStrip.tsx
+.design-sync/previews/QueryInput.tsx
+.design-sync/previews/ReasoningChips.tsx
+.design-sync/previews/ResultCard.tsx
+.design-sync/previews/ResultRenderer.tsx
+.design-sync/previews/ResultSkeleton.tsx
+.design-sync/previews/StatCards.tsx
+.design-sync/previews/TopBar.tsx
+apps/web/components/map/.fuse_hidden0000001500000001
+
+# graphify output (regenerable)
+graphify-out/
+docs/Propus_AI_Leadership_Briefing.pptx
+
+.env
+.env.*
+!.env.example
+*service-account*.json
+*-key.json
+credentials*.json
+gcloud*.json
+*.tif
+*.mbtiles
+*.zip
+data/raw/
+*.dump
+*.sql.gz
+# internal plan + agent instructions (not for public submission repo)
+propus_sustainability.md
+.claude/

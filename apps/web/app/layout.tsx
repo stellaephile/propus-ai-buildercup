@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Libre_Caslon_Text, Atkinson_Hyperlegible, Martian_Mono } from "next/font/google";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
@@ -24,11 +24,19 @@ const mono = Martian_Mono({
   variable: "--font-mono",
 });
 
+const TITLE = "Propus AI - Ask the city a question";
+const DESCRIPTION =
+  "Ask questions about Delhi's buses and metro in plain English. Real map data, and every number shows its source.";
+
 export const metadata: Metadata = {
-  title: "Propus AI - Ask the city a question",
-  description:
-    "Ask questions about Delhi's buses and metro in plain English. Real map data, and every number shows its source.",
+  title: TITLE,
+  description: DESCRIPTION,
+  openGraph: { title: TITLE, description: DESCRIPTION, type: "website", siteName: "Propus AI" },
+  twitter: { card: "summary", title: TITLE, description: DESCRIPTION },
 };
+
+// vellum, the paper colour (lib/tokens.ts)
+export const viewport: Viewport = { themeColor: "#fcf9f3" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

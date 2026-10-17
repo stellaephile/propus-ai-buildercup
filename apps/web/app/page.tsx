@@ -407,13 +407,13 @@ export default function Page() {
                   background: `linear-gradient(to right, ${palette.vellum}f2 0px, ${palette.vellum}f2 620px, ${palette.vellum}00 1000px)`,
                 }}
               />
-              <div className="relative z-[1] flex-1 flex items-center px-6">
+              <div role="main" className="relative z-[1] flex-1 flex items-center px-6">
                 <div className="max-w-xl pointer-events-auto">
                   <motion.h1
                     initial={reduced ? false : { opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ ...motionTokens.spring, delay: reduced ? 0 : 0.2 }}
-                    className="font-serif text-5xl md:text-6xl text-ink leading-[1.05]"
+                    className="font-serif text-5xl md:text-6xl text-ink leading-[1.05] text-balance"
                   >
                     Ask the city a&nbsp;question.
                   </motion.h1>
@@ -421,7 +421,7 @@ export default function Page() {
                     initial={reduced ? false : { opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ ...motionTokens.spring, delay: reduced ? 0 : 0.35 }}
-                    className="mt-3 text-inkMuted text-base md:text-lg"
+                    className="mt-3 text-inkMuted text-base md:text-lg text-pretty"
                   >
                     Ask about Delhi&apos;s buses and metro in plain English. See which
                     neighbourhoods are poorly served, who lives far from a stop, and which stops

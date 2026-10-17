@@ -97,6 +97,13 @@ export function HelpDialog({
             ))}
           </ul>
 
+          <h3 className="mt-5 text-sm font-medium">Privacy</h3>
+          <p className="mt-1.5 text-sm text-inkMuted">
+            Each question you type is logged: the text, the tools used and how long the answer
+            took. No account, IP address or session id is stored. Please do not type personal
+            information.
+          </p>
+
           <h3 className="mt-5 text-sm font-medium">Data sources</h3>
           <p className="mt-1.5 text-sm text-inkMuted">{SOURCES}</p>
         </div>

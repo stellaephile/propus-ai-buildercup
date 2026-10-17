@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- A survey point: ring, centre dot, four ticks. Colours are the celestial and vellum tokens (lib/tokens.ts). -->
+  <rect width="32" height="32" rx="7" fill="#0D1C2E"/>
+  <circle cx="16" cy="16" r="8" fill="none" stroke="#fcf9f3" stroke-width="2"/>
+  <circle cx="16" cy="16" r="2.5" fill="#fcf9f3"/>
+  <path d="M16 3v5M16 24v5M3 16h5M24 16h5" stroke="#fcf9f3" stroke-width="2" stroke-linecap="round"/>
+</svg>

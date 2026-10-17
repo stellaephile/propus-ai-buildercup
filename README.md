@@ -151,6 +151,7 @@ Open data only. Full licences and attribution are in [ATTRIBUTION.md](ATTRIBUTIO
   sit in gaps between polygons. Ward-level figures leave them out; the coverage-gap measure
   still counts them when judging who is far from a stop.
 - **The metro-station scenario** returns a table in the live app, without a drawn map zone.
+- **Each question stands alone.** Propus does not remember earlier questions in the same session.
 - **Recorded answers are dated** and do not update.
 - **Landmarks and street addresses** are not looked up: the Google place search is not enabled
   in the deployed service, so questions should name wards, stops or stations.

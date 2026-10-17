@@ -123,11 +123,13 @@ export async function* liveWithFallback(
 
   let sawResult = false;
   let failure: string | null = null;
+  let recoverable = true;
   try {
     for await (const ev of liveStream(apiUrl, query, inner.signal)) {
       if (ev.event === "result") sawResult = true;
       if (ev.event === "error" && !sawResult) {
         failure = ev.message;
+        recoverable = ev.recoverable;
         break;
       }
       yield ev;
@@ -144,7 +146,7 @@ export async function* liveWithFallback(
 
   if (failure === null) return;
   if (sawResult || built.results.length === 0) {
-    yield { event: "error", message: failure, recoverable: true };
+    yield { event: "error", message: failure, recoverable };
     return;
   }
   yield {

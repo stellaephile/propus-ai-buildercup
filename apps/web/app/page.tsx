@@ -317,6 +317,7 @@ export default function Page() {
               state={runner.state}
               onSubmit={submit}
               onRetry={runner.retry}
+              onStop={runner.stop}
               onHoverWard={setHoveredWard}
               scenarioPoint={scenarioPoint}
               scenarioSourceId={scenarioSourceId}

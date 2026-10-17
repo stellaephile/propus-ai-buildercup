@@ -51,6 +51,8 @@ export interface RunnerState {
   doneMs: number | null;
   mode: "demo" | "live";
   error: string | null;
+  /** false when retrying the same question cannot help (e.g. the question was rejected) */
+  errorRecoverable: boolean;
 }
 
 const idle: RunnerState = {
@@ -66,6 +68,7 @@ const idle: RunnerState = {
   doneMs: null,
   mode: "demo",
   error: null,
+  errorRecoverable: true,
 };
 
 export function useQueryRunner({
@@ -220,6 +223,7 @@ export function useQueryRunner({
                 ...s,
                 status: "error",
                 error: ev.message,
+                errorRecoverable: ev.recoverable,
                 // freeze the ms ticker — it only stops once doneMs is set (ReasoningChips)
                 doneMs: s.doneMs ?? Math.max(0, Math.round(performance.now() - (s.startedAt ?? performance.now()))),
                 chips: s.chips.map((c, i) =>
@@ -258,6 +262,7 @@ export function useQueryRunner({
           ...s,
           status: "error",
           error: e instanceof Error ? e.message : "Stream failed.",
+          errorRecoverable: true,
           // freeze the ms ticker — it only stops once doneMs is set (ReasoningChips)
           doneMs: s.doneMs ?? Math.max(0, Math.round(performance.now() - (s.startedAt ?? performance.now()))),
           chips: s.chips.map((c, i) =>
@@ -275,5 +280,26 @@ export function useQueryRunner({
     if (lastQuery.current) void run(lastQuery.current);
   }, [run]);
 
-  return { state, run, retry };
+  // Abandon the answer in progress. Bumping runSeq makes the running loop see it
+  // was replaced and return; aborting cancels the live request. Results already
+  // shown stay on screen.
+  const stop = useCallback(() => {
+    runSeq.current++;
+    inflight.current?.abort();
+    busy.current = false;
+    setState((s) =>
+      s.status !== "running"
+        ? s
+        : {
+            ...s,
+            status: "done",
+            chips: [],
+            plan: [],
+            notices: ["Stopped. Ask again, or pick an example."],
+            doneMs: s.doneMs ?? Math.max(0, Math.round(performance.now() - (s.startedAt ?? performance.now()))),
+          }
+    );
+  }, []);
+
+  return { state, run, retry, stop };
 }

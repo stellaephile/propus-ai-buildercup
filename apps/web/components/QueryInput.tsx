@@ -17,11 +17,14 @@ export function QueryInput({
   ghost = false,
   autoFocus = false,
   disabled = false,
+  onStop,
 }: {
   onSubmit: (q: string) => void;
   ghost?: boolean;
   autoFocus?: boolean;
   disabled?: boolean;
+  /** when set and `disabled` (an answer is running), the Analyse button becomes Stop */
+  onStop?: () => void;
 }) {
   const reduced = useReducedMotion();
   const [value, setValue] = useState("");
@@ -97,10 +100,20 @@ export function QueryInput({
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
           aria-label="Ask the city a question"
-          placeholder={ghost ? "" : "Ask a follow-up…"}
+          placeholder={ghost ? "" : "Ask a new question…"}
           className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-inkFaint"
         />
       </div>
+      {disabled && onStop ? (
+        <button
+          type="button"
+          onClick={onStop}
+          aria-label="Stop the answer"
+          className="shrink-0 rounded-md border border-celestial text-celestial text-sm font-medium px-3.5 min-h-[36px] transition-colors hover:bg-vellumShade"
+        >
+          Stop
+        </button>
+      ) : (
       <motion.button
         whileTap={reduced ? undefined : { scale: 0.98 }}
         transition={motionTokens.spring}
@@ -110,6 +123,7 @@ export function QueryInput({
       >
         Analyse
       </motion.button>
+      )}
     </motion.div>
   );
 }

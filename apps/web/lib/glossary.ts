@@ -46,6 +46,7 @@ export const LIMITS: string[] = [
   "Trips come from the timetable, not from ridership counts.",
   "Heat is land surface temperature, a relative indicator and not air temperature.",
   "Coverage is Delhi only.",
+  "Each question stands alone: Propus does not remember earlier ones.",
 ];
 
 export const SOURCES =

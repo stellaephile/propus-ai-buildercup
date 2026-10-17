@@ -45,12 +45,15 @@ export function ReasoningChips({
   doneMs,
   failedMessage,
   onRetry,
+  onTryExample,
 }: {
   chips: Chip[];
   startedAt: number | null;
   doneMs: number | null;
   failedMessage?: string | null;
   onRetry?: () => void;
+  /** shown instead of Retry when retrying the same question cannot help */
+  onTryExample?: () => void;
 }) {
   const reduced = !!useReducedMotion();
   const [now, setNow] = useState(() => performance.now());
@@ -115,6 +118,14 @@ export function ReasoningChips({
               className="shrink-0 min-h-[32px] rounded-sm border border-alert px-3 text-xs font-mono font-medium hover:bg-alert/10 transition-colors"
             >
               Retry
+            </button>
+          )}
+          {!onRetry && onTryExample && (
+            <button
+              onClick={onTryExample}
+              className="shrink-0 min-h-[32px] rounded-sm border border-alert px-3 text-xs font-mono font-medium hover:bg-alert/10 transition-colors"
+            >
+              Try an example
             </button>
           )}
         </motion.div>

@@ -7,7 +7,7 @@
  */
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { HEADLINE_GISTS, HEADLINE_QUERIES, SUSTAINABILITY_EXAMPLES } from "@/lib/demo/queries";
 import { APP_MODE } from "@/lib/mode";
@@ -25,6 +25,7 @@ export function ChatPane({
   state,
   onSubmit,
   onRetry,
+  onStop,
   onHoverWard,
   scenarioPoint,
   scenarioSourceId,
@@ -36,6 +37,7 @@ export function ChatPane({
   state: RunnerState;
   onSubmit: (q: string) => void;
   onRetry: () => void;
+  onStop: () => void;
   onHoverWard: (name: string | null) => void;
   scenarioPoint: [number, number] | null;
   scenarioSourceId: string | null;
@@ -47,6 +49,8 @@ export function ChatPane({
 }) {
   const reduced = !!useReducedMotion();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const examplesRef = useRef<HTMLDetailsElement>(null);
+  const [examplesOpen, setExamplesOpen] = useState(false);
 
   // Follow the stream only while the reader is already near the bottom; a
   // reader who scrolled up to re-read a card must not be dragged back down.
@@ -139,7 +143,11 @@ export function ChatPane({
           startedAt={state.startedAt}
           doneMs={state.doneMs}
           failedMessage={state.status === "error" ? state.error : null}
-          onRetry={onRetry}
+          onRetry={state.errorRecoverable ? onRetry : undefined}
+          onTryExample={() => {
+            setExamplesOpen(true);
+            setTimeout(() => examplesRef.current?.scrollIntoView({ block: "nearest" }), 0);
+          }}
         />
 
         <AnimatePresence mode="popLayout">
@@ -182,7 +190,12 @@ export function ChatPane({
         ))}
 
         {(state.status === "done" || state.status === "error") && (
-          <details className="rounded-md bg-sheet px-3 py-2 text-sm">
+          <details
+            ref={examplesRef}
+            open={examplesOpen}
+            onToggle={(e) => setExamplesOpen(e.currentTarget.open)}
+            className="rounded-md bg-sheet px-3 py-2 text-sm"
+          >
             <summary className="cursor-pointer min-h-[32px] py-1 text-celestialMuted hover:text-celestial">
               More questions to try
             </summary>
@@ -201,7 +214,7 @@ export function ChatPane({
           vellumShade sits between the vellum pane and the vellumDeep input
           pill, a small three-step sink instead of a line. */}
       <div className="shrink-0 bg-vellumShade/60 px-4 py-3">
-        <QueryInput onSubmit={onSubmit} disabled={state.status === "running"} />
+        <QueryInput onSubmit={onSubmit} disabled={state.status === "running"} onStop={onStop} />
       </div>
     </main>
   );

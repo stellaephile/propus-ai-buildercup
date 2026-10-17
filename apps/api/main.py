@@ -24,7 +24,7 @@ import logging
 import os
 import time
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import aclosing, asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -179,6 +179,18 @@ async def query_demo():
 # Typed SSE stream
 # ---------------------------------------------------------------------------
 
+# Analysis tools that answer a question by themselves. The model's closing prose
+# is never shown (only refusals use it), so once every tool called so far is one
+# of these and its results are in, the second model call is skipped. Lookup tools
+# (geocode_*, get_ward_rs_profile, reverse_geocode, ...) may need a follow-up tool
+# call, so a turn that used one still runs to completion.
+_SELF_CONTAINED_TOOLS = frozenset({
+    "find_underserved_areas", "get_ward_density_ranking", "get_pop_walk_access",
+    "coverage_gap", "stop_heat_exposure", "compare_transit_access",
+    "get_metro_catchment", "simulate_network_change",
+})
+
+
 def _sse(event: BaseModel) -> str:
     return f"data: {json.dumps(event.model_dump(mode='json'))}\n\n"
 
@@ -203,6 +215,10 @@ async def _stream_query(message: str, session_id: str, user_id: str, mode: str):
     accumulated: list[tuple] = []  # (PropusResult, methodology|None)
     final_text: list[str] = []  # the model's last text turn (used only for refusals)
     tools_called: list[str] = []  # for the Firestore query log
+    marks: list[tuple[str, int]] = []  # (stage, ms since request start), logged once per request
+
+    def _mark(stage: str) -> None:
+        marks.append((stage, int((time.monotonic() - start) * 1000)))
 
     async def _run_agent(active_runner):
         """Stream the agent loop, appending formatted results to `accumulated`
@@ -212,29 +228,40 @@ async def _stream_query(message: str, session_id: str, user_id: str, mode: str):
         except ImportError:
             from agent import run_query_events
 
-        async for event in run_query_events(message, session_id, user_id, active_runner):
-            if event.is_final_response() and event.content and event.content.parts:
-                final_text[:] = [event.content.parts[0].text or ""]
-            for call in event.get_function_calls():
-                tools_called.append(call.name)
-                yield _sse(ReasoningStepEvent(step=f"Calling {call.name}..."))
+        _mark("agent_start")
+        async with aclosing(run_query_events(message, session_id, user_id, active_runner)) as events:
+            async for event in events:
+                if event.is_final_response() and event.content and event.content.parts:
+                    final_text[:] = [event.content.parts[0].text or ""]
+                    _mark("final_text")
+                for call in event.get_function_calls():
+                    tools_called.append(call.name)
+                    _mark(f"call:{call.name}")
+                    yield _sse(ReasoningStepEvent(step=f"Calling {call.name}..."))
 
-            for resp in event.get_function_responses():
-                tool_name = resp.name
-                tool_response = resp.response
-                args = getattr(resp, "args", None) or {}
-                try:
-                    results = format_tool_response(tool_name, tool_response, args)
-                except Exception as fmt_exc:
-                    log.error(f"Formatter error for {tool_name}: {fmt_exc}", exc_info=True)
-                    results = [StatCardsResult(cards=[
-                        StatCard(label="Could not display this result", value="Something went wrong building this result. Try the question again.",
-                                 evidence="Calculated", alert=True)
-                    ])]
-                methodology = METHODOLOGY.get(tool_name)
-                for r in results:
-                    accumulated.append((r, methodology))
-                yield _sse(ReasoningStepEvent(step=f"{tool_name} → {len(results)} result(s)"))
+                for resp in event.get_function_responses():
+                    tool_name = resp.name
+                    _mark(f"resp:{tool_name}")
+                    tool_response = resp.response
+                    args = getattr(resp, "args", None) or {}
+                    try:
+                        results = format_tool_response(tool_name, tool_response, args)
+                    except Exception as fmt_exc:
+                        log.error(f"Formatter error for {tool_name}: {fmt_exc}", exc_info=True)
+                        results = [StatCardsResult(cards=[
+                            StatCard(label="Could not display this result", value="Something went wrong building this result. Try the question again.",
+                                     evidence="Calculated", alert=True)
+                        ])]
+                    methodology = METHODOLOGY.get(tool_name)
+                    for r in results:
+                        accumulated.append((r, methodology))
+                    yield _sse(ReasoningStepEvent(step=f"{tool_name} → {len(results)} result(s)"))
+                responses = event.get_function_responses()
+                failed = any(isinstance(r.response, dict) and "error" in r.response for r in responses)
+                # A failed tool call keeps the second turn: the model may recover.
+                if accumulated and responses and not failed and all(t in _SELF_CONTAINED_TOOLS for t in tools_called):
+                    _mark("early_stop")
+                    return
 
     async def _run_advanced_with_fallback(skip_model: str | None = None):
         """Walk agent.MODEL_CHAIN, only moving to the next model on a
@@ -302,6 +329,9 @@ async def _stream_query(message: str, session_id: str, user_id: str, mode: str):
             yield _sse(ResultEvent(index=i, payload=result, methodology=methodology))
 
         ms = int((time.monotonic() - start) * 1000)
+        # One line per request so slow ones can be read stage by stage in Cloud Logging.
+        log.info("perf %s", json.dumps({"query_id": query_id, "tier": tier, "model": model_used,
+                                        "total_ms": ms, "stages": marks}))
         log_query(query_id=query_id, question=message, tools=tools_called,
                   result_kinds=[r.kind for r, _ in accumulated],
                   outcome="results" if tools_called else "refusal",

@@ -1621,11 +1621,24 @@ def _make_litellm_model(model: str):
 
 def create_agent(model: str, tier: str = "advanced"):
     from google.adk.agents import Agent
+    from google.genai import types
 
     # "provider/model" names (e.g. groq/openai/gpt-oss-120b) route through
     # LiteLLM; bare names are native Gemini.
     adk_model = _make_litellm_model(model) if "/" in model else model
     slim = tier == "simple"
+
+    # gemini-2.5-flash and -flash-lite think dynamically by default, which put
+    # seconds and a long tail on every tool-routing turn. Choosing a tool needs
+    # no reasoning budget, and temperature 0 keeps the choice repeatable. Other
+    # models either cannot disable thinking (2.5-pro) or do not support it.
+    config = (
+        types.GenerateContentConfig(
+            temperature=0, thinking_config=types.ThinkingConfig(thinking_budget=0)
+        )
+        if model.startswith("gemini-2.5-flash")
+        else None
+    )
 
     agent = Agent(
         name="delhi_transit_agent",
@@ -1633,6 +1646,7 @@ def create_agent(model: str, tier: str = "advanced"):
         description="Delhi transit equity intelligence — real GTFS + PostGIS data",
         instruction=SIMPLE_SYSTEM_PROMPT if slim else SYSTEM_PROMPT,
         tools=SIMPLE_TOOLS if slim else TOOLS,
+        generate_content_config=config,
     )
     log.info("Agent ready — model=%s tier=%s", model, tier)
     return agent

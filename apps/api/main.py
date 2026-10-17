@@ -46,6 +46,7 @@ log = logging.getLogger(__name__)
 # to absolute — do this for every same-package import in this file.
 try:
     from .formatters import METHODOLOGY, format_refusal, format_tool_response
+    from .querylog import record as log_query
     from .schemas import (
         BarChartResult,
         BarSeriesPoint,
@@ -60,6 +61,7 @@ try:
     )
 except ImportError:
     from formatters import METHODOLOGY, format_refusal, format_tool_response
+    from querylog import record as log_query
     from schemas import (
         BarChartResult,
         BarSeriesPoint,
@@ -183,6 +185,7 @@ async def _stream_query(message: str, session_id: str, user_id: str, mode: str):
 
     accumulated: list[tuple] = []  # (PropusResult, methodology|None)
     final_text: list[str] = []  # the model's last text turn (used only for refusals)
+    tools_called: list[str] = []  # for the Firestore query log
 
     async def _run_agent(active_runner):
         """Stream the agent loop, appending formatted results to `accumulated`
@@ -196,6 +199,7 @@ async def _stream_query(message: str, session_id: str, user_id: str, mode: str):
             if event.is_final_response() and event.content and event.content.parts:
                 final_text[:] = [event.content.parts[0].text or ""]
             for call in event.get_function_calls():
+                tools_called.append(call.name)
                 yield _sse(ReasoningStepEvent(step=f"Calling {call.name}..."))
 
             for resp in event.get_function_responses():
@@ -281,10 +285,16 @@ async def _stream_query(message: str, session_id: str, user_id: str, mode: str):
             yield _sse(ResultEvent(index=i, payload=result, methodology=methodology))
 
         ms = int((time.monotonic() - start) * 1000)
+        log_query(query_id=query_id, question=message, tools=tools_called,
+                  result_kinds=[r.kind for r, _ in accumulated],
+                  outcome="results" if tools_called else "refusal",
+                  ms=ms, mode=mode, model=model_used)
         yield _sse(DoneEvent(query_id=query_id, ms=ms, mode=mode, model=model_used))
 
     except Exception as exc:
         log.error(f"Query stream error: {exc}", exc_info=True)
+        log_query(query_id=query_id, question=message, tools=tools_called, result_kinds=[],
+                  outcome="error", ms=int((time.monotonic() - start) * 1000), mode=mode, model=model_used)
         yield _sse(ErrorEvent(message="Propus could not finish this analysis. Please try again.", recoverable=True))
 
 

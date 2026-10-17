@@ -17,3 +17,6 @@ httpx>=0.27,<1
 # simple-tier models — see MODEL_CHAIN/SIMPLE_MODEL_CHAIN in agent.py).
 google-adk[db,extensions]>=2.8,<3
 psycopg2-binary==2.9.12
+
+# ── Query log (apps/api/querylog.py; Cloud Run only, off locally) ────────────
+google-cloud-firestore>=2.19,<3

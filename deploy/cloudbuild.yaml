@@ -1,0 +1,20 @@
+# One Cloud Build config for both services (repo-root context).
+# Substitutions: _DOCKERFILE (apps/api/Dockerfile | apps/web/Dockerfile),
+#                _IMAGE (full Artifact Registry tag), _API_URL (web only).
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - ${_DOCKERFILE}
+      - --build-arg
+      - NEXT_PUBLIC_API_URL=${_API_URL}
+      - -t
+      - ${_IMAGE}
+      - .
+images:
+  - ${_IMAGE}
+substitutions:
+  _API_URL: ""
+options:
+  logging: CLOUD_LOGGING_ONLY

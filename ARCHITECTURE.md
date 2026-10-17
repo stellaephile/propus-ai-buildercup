@@ -29,7 +29,7 @@ union); the frontend picks the component and the map draws whatever GeoJSON + st
 result carries. The map is deliberately "dumb."
 
 ```
-Next.js (Vercel) ──SSE──▶ FastAPI agent (Render) ──▶ Supabase Postgres/PostGIS
+Next.js (Cloud Run) ──SSE──▶ FastAPI agent (Cloud Run) ──▶ Supabase Postgres/PostGIS
       │                          │                          │
   MapLibre + deck.gl        typed PropusResult /       parametrized PostGIS
   render map layers         PropusEvent contract       functions (db/functions.sql)
@@ -43,12 +43,12 @@ Next.js (Vercel) ──SSE──▶ FastAPI agent (Render) ──▶ Supabase Po
 
 | Path | What | Notes |
 |---|---|---|
-| `apps/web/` | Next.js (App Router) + TypeScript frontend | deploys to Vercel via root-directory setting |
-| `apps/api/` | FastAPI + ADK agent | deploys to Render; **canonical backend** |
+| `apps/web/` | Next.js (App Router) + TypeScript frontend | deploys to Cloud Run as `propus-web` (`deploy/cloudrun.sh`) |
+| `apps/api/` | FastAPI + ADK agent | deploys to Cloud Run as `propus-api`; **canonical backend** |
 | `packages/contract/` | `PropusResult` + `PropusEvent` TS types | single source of truth, mirrored into Pydantic |
 | `db/` | `schema.sql`, `functions.sql`, `roles.sql` | the deterministic geo layer + DDL |
 | `pipeline/` | GTFS ingest, ward-metric compute, RS zonal stats | unchanged from V1 |
-| `docs/` | `DESIGN.md`, `TASKS.md`, `BUGS.md`, `CARES.md`, etc. | working docs |
+| `docs/` | `RUNNING.md`, `DEPLOY_GCP.md`, `DECISIONS.md`, `AGENT_AUDIT.md`, `FINDINGS.md` | the notes kept in the repo |
 | `apps/web/public/fixtures/` | `wards.geojson`, `stops.json` | real geometry shipped to the client (~768 KB) |
 
 **The contract is the spine.** `packages/contract/src/index.ts` defines the discriminated
@@ -140,14 +140,14 @@ in `pipeline/`.
 
 ## 4. Deployment reality (V2.0)
 
-Target per CLAUDE.md §4: **Vercel Hobby** for `apps/web`, **Render free web service** for
-`apps/api`, both pointed at their subdirectory via root-directory settings — one repo,
-independent deploys. Supabase free tier for the DB (PostGIS + pgvector).
+Both apps run on **Cloud Run** (`propus-web`, `propus-api`, region asia-south1), built from the
+repo root by `deploy/cloudrun.sh` (see `docs/DEPLOY_GCP.md`). The model is Gemini on Vertex AI
+through ADK; the database is Supabase (PostGIS) reached with a read-only role; questions are
+logged to Firestore. Both services keep one instance warm, and
+`.github/workflows/keep-warm.yml` checks them every 10 minutes and fails if either is down.
 
-- Render free tier sleeps after idle; add an external keep-warm ping (UptimeRobot / GitHub
-  Actions cron, ~10 min) and hit the URL before walking into the demo.
-- The old GCP Cloud Run path (`cloud-run/`, `deploy.sh`, `cloudbuild.yaml`,
-  `docker-compose.yml`) belongs to the V1 stack (§9). Don't wire the V2 apps to it.
+- The old `cloud-run/` folder, root `deploy.sh`, root `cloudbuild.yaml` and `docker-compose.yml`
+  belong to the V1 Streamlit stack (§9). The current deploy path is `deploy/cloudrun.sh`.
 
 ---
 

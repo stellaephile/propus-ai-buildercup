@@ -39,6 +39,12 @@ for role in roles/aiplatform.user roles/datastore.user roles/secretmanager.secre
   done
 done
 
+# CORS: allow only the web app's own origins (Cloud Run serves it on two URLs).
+# Empty on a first deploy, when the web service does not exist yet; the API then
+# allows any origin until the next run.
+WEB_ORIGINS="$(gcloud run services describe propus-web --project "${PROJECT}" --region "${REGION}" \
+  --format 'value(metadata.annotations."run.googleapis.com/urls")' 2>/dev/null | tr -d '[]" ' || true)"
+
 echo "== API"
 gcloud builds submit --project "${PROJECT}" --config deploy/cloudbuild.yaml \
   --substitutions "_DOCKERFILE=apps/api/Dockerfile,_IMAGE=${REG}/api:latest" .
@@ -46,7 +52,7 @@ gcloud run deploy propus-api --project "${PROJECT}" --region "${REGION}" \
   --image "${REG}/api:latest" --service-account "${SA}" \
   --allow-unauthenticated --min-instances 1 --max-instances 3 \
   --cpu 1 --memory 1Gi --timeout 300 --concurrency 20 \
-  --set-env-vars "GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=${PROJECT},GOOGLE_CLOUD_LOCATION=${VERTEX_LOCATION},QUERY_LOG_COLLECTION=query_log" \
+  --set-env-vars "^|^GOOGLE_GENAI_USE_VERTEXAI=true|GOOGLE_CLOUD_PROJECT=${PROJECT}|GOOGLE_CLOUD_LOCATION=${VERTEX_LOCATION}|QUERY_LOG_COLLECTION=query_log${WEB_ORIGINS:+|CORS_ORIGINS=${WEB_ORIGINS}}" \
   --set-secrets "AGENT_DATABASE_URL=propus-agent-database-url:latest"
 API_URL="$(gcloud run services describe propus-api --project "${PROJECT}" --region "${REGION}" --format 'value(status.url)')"
 

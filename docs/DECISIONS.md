@@ -100,3 +100,12 @@ and no trace data. Speed comes from precomputed PostGIS functions, one tool call
 `gemini-2.5-flash`, Cloud Run `min-instances=1`, and demo mode. Correctness is checked by
 the golden question set (S9), which asserts tool order and numeric grounding. Revisit a
 learned router after the hackathon, using the Firestore query log as training data.
+
+**D18 — Heat threshold is an adjustable SD multiple** (2026-10-17)
+`fn_stop_heat_exposure` and the `stop_heat_exposure` tool take `sd` (0–3, default 1.0): hot =
+LST ≥ city mean + sd × city SD. A fixed `threshold_c` still overrides it. Results carry
+`threshold_sd`, the equivalent °C, and the share of stops flagged (percentile reading).
+Sweep on 4,650 stops (mean 41.3 °C, SD 1.7): 0 SD 41.3 °C → 48.0% of stops; 0.5 SD 42.1 →
+30.5%; 1 SD 43.0 → 15.2%; 1.5 SD 43.8 → 7.0%; 2 SD 44.7 → 2.4%; 2.5 SD 45.5 → 1.0%.
+A UI slider (0–2.5 SD, step 0.5) inside the heat result card is optional task O2; it
+recomputes via this function on release.

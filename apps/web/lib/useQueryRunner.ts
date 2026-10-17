@@ -206,7 +206,9 @@ export function useQueryRunner({
                 status: "done",
                 doneMs: ev.ms,
                 mode: ev.mode,
-                notices: built.notices,
+                // built.notices is the demo classifier's copy ("Demo mode answers the five
+                // headline queries..."); a live answer must not show it.
+                notices: ev.mode === "live" ? [] : built.notices,
                 chips: [],
               }));
               break;

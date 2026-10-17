@@ -1,0 +1,369 @@
+{
+  "question": "Where do people live far from any bus stop or metro station?",
+  "recordedAt": "2026-10-17",
+  "steps": [
+    "Analysing your question...",
+    "Calling coverage_gap...",
+    "coverage_gap → 3 result(s)"
+  ],
+  "results": [
+    {
+      "payload": {
+        "kind": "stat_cards",
+        "cards": [
+          {
+            "label": "Population beyond walking distance",
+            "value": "15.9",
+            "unit": "%",
+            "evidence": "Estimated",
+            "alert": true,
+            "note": "Farther than 500m of a bus stop and 800m of a metro station"
+          },
+          {
+            "label": "People beyond walking distance",
+            "value": "3059380",
+            "unit": "people",
+            "evidence": "Estimated",
+            "alert": null,
+            "note": null
+          },
+          {
+            "label": "Delhi population (mapped wards)",
+            "value": "19285016",
+            "unit": "people",
+            "evidence": "Estimated",
+            "alert": null,
+            "note": null
+          }
+        ]
+      },
+      "methodology": {
+        "formula": "unserved cell = nearest bus stop location > bus_radius_m AND nearest metro station > metro_radius_m (mode 'any'; one condition for 'bus'/'metro'); share = Σ pop(unserved) / Σ pop; clusters = unserved cells grouped on a 1 km grid, ranked by population",
+        "crs": "EPSG:32643 (UTM 43N) for distances; EPSG:4326 for display",
+        "sources": [
+          "WorldPop 2020",
+          "OTD Delhi bus (DTC)",
+          "DMRC metro",
+          "OpenCity/DataMeet wards"
+        ],
+        "evidence": "Estimated",
+        "caveats": [
+          "Straight-line distance from each 100 m cell centre, not network/footpath walking distance.",
+          "Bus stops are de-duplicated physical stop locations (40 m clusters of boarding points).",
+          "Defaults 500 m bus / 800 m metro follow India's National TOD Policy (500–800 m influence zone)."
+        ]
+      }
+    },
+    {
+      "payload": {
+        "kind": "data_table",
+        "columns": [
+          "Rank",
+          "Unserved people",
+          "Avg distance (m)",
+          "Lon",
+          "Lat"
+        ],
+        "rows": [
+          [
+            1,
+            24006,
+            1078,
+            77.23753,
+            28.5033
+          ],
+          [
+            2,
+            22640,
+            1179,
+            77.05739,
+            28.6959
+          ],
+          [
+            3,
+            22555,
+            933,
+            77.31978,
+            28.51048
+          ],
+          [
+            4,
+            22087,
+            985,
+            77.24783,
+            28.5032
+          ],
+          [
+            5,
+            22049,
+            746,
+            77.13947,
+            28.75712
+          ],
+          [
+            6,
+            21506,
+            777,
+            77.26315,
+            28.69232
+          ],
+          [
+            7,
+            21375,
+            714,
+            77.1605,
+            28.74838
+          ],
+          [
+            8,
+            21324,
+            1310,
+            77.22712,
+            28.50336
+          ],
+          [
+            9,
+            20123,
+            1185,
+            77.03594,
+            28.64154
+          ],
+          [
+            10,
+            19872,
+            2068,
+            77.2372,
+            28.49424
+          ]
+        ],
+        "highlight": null,
+        "evidence": "Estimated",
+        "alertRows": null,
+        "rowIds": null
+      },
+      "methodology": {
+        "formula": "unserved cell = nearest bus stop location > bus_radius_m AND nearest metro station > metro_radius_m (mode 'any'; one condition for 'bus'/'metro'); share = Σ pop(unserved) / Σ pop; clusters = unserved cells grouped on a 1 km grid, ranked by population",
+        "crs": "EPSG:32643 (UTM 43N) for distances; EPSG:4326 for display",
+        "sources": [
+          "WorldPop 2020",
+          "OTD Delhi bus (DTC)",
+          "DMRC metro",
+          "OpenCity/DataMeet wards"
+        ],
+        "evidence": "Estimated",
+        "caveats": [
+          "Straight-line distance from each 100 m cell centre, not network/footpath walking distance.",
+          "Bus stops are de-duplicated physical stop locations (40 m clusters of boarding points).",
+          "Defaults 500 m bus / 800 m metro follow India's National TOD Policy (500–800 m influence zone)."
+        ]
+      }
+    },
+    {
+      "payload": {
+        "kind": "map_layer",
+        "layer": "points",
+        "geojson": {
+          "type": "FeatureCollection",
+          "features": [
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.23753,
+                  28.5033
+                ]
+              },
+              "properties": {
+                "name": "Gap #1",
+                "unserved_pop": 24006,
+                "avg_dist_m": 1078,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.05739,
+                  28.6959
+                ]
+              },
+              "properties": {
+                "name": "Gap #2",
+                "unserved_pop": 22640,
+                "avg_dist_m": 1179,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.31978,
+                  28.51048
+                ]
+              },
+              "properties": {
+                "name": "Gap #3",
+                "unserved_pop": 22555,
+                "avg_dist_m": 933,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.24783,
+                  28.5032
+                ]
+              },
+              "properties": {
+                "name": "Gap #4",
+                "unserved_pop": 22087,
+                "avg_dist_m": 985,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.13947,
+                  28.75712
+                ]
+              },
+              "properties": {
+                "name": "Gap #5",
+                "unserved_pop": 22049,
+                "avg_dist_m": 746,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.26315,
+                  28.69232
+                ]
+              },
+              "properties": {
+                "name": "Gap #6",
+                "unserved_pop": 21506,
+                "avg_dist_m": 777,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.1605,
+                  28.74838
+                ]
+              },
+              "properties": {
+                "name": "Gap #7",
+                "unserved_pop": 21375,
+                "avg_dist_m": 714,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.22712,
+                  28.50336
+                ]
+              },
+              "properties": {
+                "name": "Gap #8",
+                "unserved_pop": 21324,
+                "avg_dist_m": 1310,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.03594,
+                  28.64154
+                ]
+              },
+              "properties": {
+                "name": "Gap #9",
+                "unserved_pop": 20123,
+                "avg_dist_m": 1185,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.2372,
+                  28.49424
+                ]
+              },
+              "properties": {
+                "name": "Gap #10",
+                "unserved_pop": 19872,
+                "avg_dist_m": 2068,
+                "evidence": "Estimated"
+              }
+            }
+          ]
+        },
+        "style": {
+          "fillToken": null,
+          "lineToken": null,
+          "rampProperty": null,
+          "colorProperty": null,
+          "opacity": 1.0,
+          "bloomRing": null
+        },
+        "camera": {
+          "center": [
+            77.209,
+            28.6139
+          ],
+          "zoom": 10.0,
+          "pitch": null,
+          "bearing": null,
+          "bounds": null
+        },
+        "label": "Largest coverage gaps (1 km clusters, any)",
+        "legend": null
+      },
+      "methodology": {
+        "formula": "unserved cell = nearest bus stop location > bus_radius_m AND nearest metro station > metro_radius_m (mode 'any'; one condition for 'bus'/'metro'); share = Σ pop(unserved) / Σ pop; clusters = unserved cells grouped on a 1 km grid, ranked by population",
+        "crs": "EPSG:32643 (UTM 43N) for distances; EPSG:4326 for display",
+        "sources": [
+          "WorldPop 2020",
+          "OTD Delhi bus (DTC)",
+          "DMRC metro",
+          "OpenCity/DataMeet wards"
+        ],
+        "evidence": "Estimated",
+        "caveats": [
+          "Straight-line distance from each 100 m cell centre, not network/footpath walking distance.",
+          "Bus stops are de-duplicated physical stop locations (40 m clusters of boarding points).",
+          "Defaults 500 m bus / 800 m metro follow India's National TOD Policy (500–800 m influence zone)."
+        ]
+      }
+    }
+  ]
+}

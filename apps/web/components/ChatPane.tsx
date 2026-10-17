@@ -9,7 +9,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useRef } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
-import { HEADLINE_GISTS, HEADLINE_QUERIES, LIVE_EXAMPLES } from "@/lib/demo/queries";
+import { HEADLINE_GISTS, HEADLINE_QUERIES, SUSTAINABILITY_EXAMPLES } from "@/lib/demo/queries";
 import { APP_MODE } from "@/lib/mode";
 import type { RunnerState } from "@/lib/useQueryRunner";
 import type { StopsData } from "@/lib/data/useStopsData";
@@ -243,18 +243,14 @@ function ExampleList({ onSubmit }: { onSubmit: (q: string) => void }) {
           <ExampleButton key={q} q={q} gist={HEADLINE_GISTS[q]} onSubmit={onSubmit} />
         ))}
       </div>
-      {APP_MODE === "live" && (
-        <>
-          <h2 className="mt-4 font-mono text-xs uppercase tracking-wide text-inkMuted">
-            Heat and who is left out
-          </h2>
-          <div className="mt-1 flex flex-col">
-            {LIVE_EXAMPLES.map((e) => (
-              <ExampleButton key={e.q} q={e.q} gist={e.gist} onSubmit={onSubmit} />
-            ))}
-          </div>
-        </>
-      )}
+      <h2 className="mt-4 font-mono text-xs uppercase tracking-wide text-inkMuted">
+        Heat and who is left out
+      </h2>
+      <div className="mt-1 flex flex-col">
+        {SUSTAINABILITY_EXAMPLES.map((e) => (
+          <ExampleButton key={e.q} q={e.q} gist={e.gist} onSubmit={onSubmit} />
+        ))}
+      </div>
     </>
   );
 }

@@ -15,7 +15,6 @@ import type { PropusResult } from "@propus/contract";
 import { ChatPane } from "@/components/ChatPane";
 import { ChatPaneToggle } from "@/components/ChatPaneToggle";
 import { HelpDialog } from "@/components/HelpDialog";
-import { APP_MODE } from "@/lib/mode";
 import { landingExamples } from "@/lib/demo/queries";
 import { QueryInput } from "@/components/QueryInput";
 import { TopBar } from "@/components/TopBar";
@@ -437,7 +436,7 @@ export default function Page() {
                     <QueryInput onSubmit={submit} ghost autoFocus />
                     <p className="mt-3 text-sm text-inkMuted">Not sure what to ask? Try one:</p>
                     <ul className="mt-1">
-                      {landingExamples(APP_MODE === "live").map((q) => (
+                      {landingExamples().map((q) => (
                         <li key={q}>
                           <button
                             type="button"

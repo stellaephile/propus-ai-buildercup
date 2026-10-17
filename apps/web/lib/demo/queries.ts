@@ -25,6 +25,9 @@ export type QueryIntent =
   | "catchment"
   | "density_rank"
   | "scenario"
+  | "heat"
+  | "coverage_gap"
+  | "refusal"
   | "unknown";
 
 export interface BuiltQuery {
@@ -56,8 +59,8 @@ export const HEADLINE_GISTS: Record<(typeof HEADLINE_QUERIES)[number], string> =
     "A what-if: drop a station on the map and see how many stops come within reach.",
 };
 
-/** Live mode only: these call the agent's sustainability tools, which the recorded demo cannot replay. */
-export const LIVE_EXAMPLES: { q: string; gist: string }[] = [
+/** Sustainability questions. Demo mode replays a recorded answer (lib/demo/recorded); live mode runs the agent. */
+export const SUSTAINABILITY_EXAMPLES: { q: string; gist: string }[] = [
   {
     q: "Which busy stops are on the hottest surfaces in Delhi?",
     gist: "Satellite surface temperature at the busiest stops. A heat-exposure check, not air temperature.",
@@ -72,15 +75,17 @@ export const LIVE_EXAMPLES: { q: string; gist: string }[] = [
   },
 ];
 
-/** Three questions for the landing page: a transit one first, then whatever this build can really answer. */
-export function landingExamples(live: boolean): string[] {
-  return live
-    ? [HEADLINE_QUERIES[0], LIVE_EXAMPLES[0].q, LIVE_EXAMPLES[1].q]
-    : [HEADLINE_QUERIES[0], HEADLINE_QUERIES[1], HEADLINE_QUERIES[2]];
+/** Three questions for the landing page: one transit question, then the two sustainability ones. */
+export function landingExamples(): string[] {
+  return [HEADLINE_QUERIES[0], SUSTAINABILITY_EXAMPLES[0].q, SUSTAINABILITY_EXAMPLES[1].q];
 }
 
 export function classify(q: string): QueryIntent {
   const s = q.toLowerCase();
+  // Sustainability questions first; none of the transit patterns below overlap them.
+  if (/air quality|pollution|\baqi\b|ridership|income/.test(s)) return "refusal";
+  if (/\b(hot|hottest|heat|temperature)\b/.test(s)) return "heat";
+  if (/far from|beyond|farther|unserved|coverage gap|no (bus|metro|transit)/.test(s)) return "coverage_gap";
   if (/(worst|underserved|poor|gap).*(ward|access)|ward.*worst/.test(s)) return "worst_wards";
   if (/compare|versus| vs /.test(s)) return "comparison";
   // scenario must be tested before catchment: "if a metro station is added … within 800m"
@@ -466,7 +471,7 @@ export function buildUnknown(): BuiltQuery {
     steps: ["Parsing the question"],
     results: [],
     notices: [
-      "Demo mode answers the five headline queries. Try one from the suggestions — live-LLM mode handles free-form questions.",
+      "Demo mode answers the five headline queries and three sustainability questions. Try one from the suggestions — live-LLM mode handles free-form questions.",
     ],
   };
 }

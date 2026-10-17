@@ -1,0 +1,661 @@
+{
+  "question": "Which busy stops are on the hottest surfaces in Delhi?",
+  "recordedAt": "2026-10-17",
+  "steps": [
+    "Analysing your question...",
+    "Calling stop_heat_exposure...",
+    "stop_heat_exposure → 3 result(s)"
+  ],
+  "results": [
+    {
+      "payload": {
+        "kind": "stat_cards",
+        "cards": [
+          {
+            "label": "Stops on the hottest surfaces",
+            "value": "705",
+            "unit": null,
+            "evidence": "Estimated",
+            "alert": true,
+            "note": "Surface ≥ 43.0 °C · city mean + 1 SD (41.3 + 1 × 1.7 °C) · top 15.2% of 4650 stops"
+          },
+          {
+            "label": "Daily trips calling at those stops",
+            "value": "12.8",
+            "unit": "%",
+            "evidence": "Estimated",
+            "alert": true,
+            "note": "Scheduled GTFS trips, not ridership"
+          },
+          {
+            "label": "Surface-temperature threshold",
+            "value": "43.0",
+            "unit": "°C",
+            "evidence": "Estimated",
+            "alert": null,
+            "note": "Land surface temperature, not air temperature"
+          }
+        ]
+      },
+      "methodology": {
+        "formula": "lst_c = mean Landsat 8/9 ST_B10 within 100 m of the stop, from the cloud/shadow-masked median of April-June scenes 2023-2025; hot stop = lst_c ≥ threshold (default city mean + 1 SD over all stops; SD multiple adjustable 0-3); share = Σ trips/day at hot stops / Σ trips/day; stops listed by trips/day",
+        "crs": "EPSG:4326 for display; imagery sampled at 30 m in the Landsat UTM grid",
+        "sources": [
+          "Landsat 8/9 Collection 2 Level 2 (USGS, via Google Earth Engine)",
+          "OTD Delhi bus (DTC)",
+          "DMRC metro"
+        ],
+        "evidence": "Estimated",
+        "caveats": [
+          "Land surface temperature, not air temperature or felt heat; use it as a relative indicator.",
+          "Single late-morning satellite overpass per scene, not a daily maximum.",
+          "Trips per day are scheduled GTFS trips, not observed ridership.",
+          "The default threshold is relative to Delhi's own distribution, so it always flags the hottest part of the city."
+        ]
+      }
+    },
+    {
+      "payload": {
+        "kind": "data_table",
+        "columns": [
+          "Stop",
+          "Mode",
+          "Surface temp (°C)",
+          "Trips/day",
+          "Lon",
+          "Lat"
+        ],
+        "rows": [
+          [
+            "Anand Vihar ISBT Terminal",
+            "bus",
+            44.3,
+            5120,
+            77.31495,
+            28.64633
+          ],
+          [
+            "Anand Vihar ISBT Main Road",
+            "bus",
+            43.2,
+            5032,
+            77.31789,
+            28.64701
+          ],
+          [
+            "Police Station NajafGarh",
+            "bus",
+            43.7,
+            4353,
+            76.98134,
+            28.61032
+          ],
+          [
+            "Zakhira Flyover",
+            "bus",
+            43.6,
+            4256,
+            77.16539,
+            28.66851
+          ],
+          [
+            "N D R Station G No 2",
+            "bus",
+            43.2,
+            4111,
+            77.2237,
+            28.64291
+          ],
+          [
+            "KAIR WOMEN COLLEGE",
+            "bus",
+            43.6,
+            4025,
+            76.94734,
+            28.60813
+          ],
+          [
+            "Mohan Garden",
+            "bus",
+            43.0,
+            3965,
+            77.03919,
+            28.62017
+          ],
+          [
+            "Daya Basti Flyover",
+            "bus",
+            43.0,
+            3902,
+            77.17007,
+            28.66643
+          ],
+          [
+            "Ashok Nagar / Meet Nagar",
+            "bus",
+            43.7,
+            3726,
+            77.2979,
+            28.70014
+          ],
+          [
+            "Jharoda Crossing Jharoda Road",
+            "bus",
+            43.6,
+            3620,
+            76.97955,
+            28.61365
+          ],
+          [
+            "Swarn Park",
+            "bus",
+            43.8,
+            3560,
+            77.0409,
+            28.68229
+          ],
+          [
+            "Chhathh Ghat Park",
+            "bus",
+            43.9,
+            3493,
+            77.01519,
+            28.61895
+          ],
+          [
+            "Prem Nursary",
+            "bus",
+            43.6,
+            3378,
+            76.97129,
+            28.61028
+          ],
+          [
+            "Holy Cross School",
+            "bus",
+            43.5,
+            3219,
+            76.98111,
+            28.61454
+          ],
+          [
+            "Samalkha Village",
+            "bus",
+            43.6,
+            3157,
+            77.09045,
+            28.53452
+          ],
+          [
+            "Dabri Crossing Dwarka Road",
+            "bus",
+            43.2,
+            3061,
+            77.08609,
+            28.61196
+          ],
+          [
+            "Nangli Sakrawati Crossing",
+            "bus",
+            43.4,
+            2981,
+            77.00739,
+            28.61632
+          ],
+          [
+            "Brahm Shakti Hospital",
+            "bus",
+            43.2,
+            2920,
+            77.08061,
+            28.71244
+          ],
+          [
+            "Sultan Puri Crossing",
+            "bus",
+            43.3,
+            2796,
+            77.06879,
+            28.68229
+          ],
+          [
+            "Qamruddin Nagar Terminal",
+            "bus",
+            43.0,
+            2772,
+            77.05427,
+            28.68228
+          ]
+        ],
+        "highlight": null,
+        "evidence": "Estimated",
+        "alertRows": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19
+        ],
+        "rowIds": null
+      },
+      "methodology": {
+        "formula": "lst_c = mean Landsat 8/9 ST_B10 within 100 m of the stop, from the cloud/shadow-masked median of April-June scenes 2023-2025; hot stop = lst_c ≥ threshold (default city mean + 1 SD over all stops; SD multiple adjustable 0-3); share = Σ trips/day at hot stops / Σ trips/day; stops listed by trips/day",
+        "crs": "EPSG:4326 for display; imagery sampled at 30 m in the Landsat UTM grid",
+        "sources": [
+          "Landsat 8/9 Collection 2 Level 2 (USGS, via Google Earth Engine)",
+          "OTD Delhi bus (DTC)",
+          "DMRC metro"
+        ],
+        "evidence": "Estimated",
+        "caveats": [
+          "Land surface temperature, not air temperature or felt heat; use it as a relative indicator.",
+          "Single late-morning satellite overpass per scene, not a daily maximum.",
+          "Trips per day are scheduled GTFS trips, not observed ridership.",
+          "The default threshold is relative to Delhi's own distribution, so it always flags the hottest part of the city."
+        ]
+      }
+    },
+    {
+      "payload": {
+        "kind": "map_layer",
+        "layer": "points",
+        "geojson": {
+          "type": "FeatureCollection",
+          "features": [
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.31495,
+                  28.64633
+                ]
+              },
+              "properties": {
+                "name": "Anand Vihar ISBT Terminal",
+                "mode": "bus",
+                "lst_c": 44.3,
+                "trips_day": 5120,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.31789,
+                  28.64701
+                ]
+              },
+              "properties": {
+                "name": "Anand Vihar ISBT Main Road",
+                "mode": "bus",
+                "lst_c": 43.2,
+                "trips_day": 5032,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  76.98134,
+                  28.61032
+                ]
+              },
+              "properties": {
+                "name": "Police Station NajafGarh",
+                "mode": "bus",
+                "lst_c": 43.7,
+                "trips_day": 4353,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.16539,
+                  28.66851
+                ]
+              },
+              "properties": {
+                "name": "Zakhira Flyover",
+                "mode": "bus",
+                "lst_c": 43.6,
+                "trips_day": 4256,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.2237,
+                  28.64291
+                ]
+              },
+              "properties": {
+                "name": "N D R Station G No 2",
+                "mode": "bus",
+                "lst_c": 43.2,
+                "trips_day": 4111,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  76.94734,
+                  28.60813
+                ]
+              },
+              "properties": {
+                "name": "KAIR WOMEN COLLEGE",
+                "mode": "bus",
+                "lst_c": 43.6,
+                "trips_day": 4025,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.03919,
+                  28.62017
+                ]
+              },
+              "properties": {
+                "name": "Mohan Garden",
+                "mode": "bus",
+                "lst_c": 43.0,
+                "trips_day": 3965,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.17007,
+                  28.66643
+                ]
+              },
+              "properties": {
+                "name": "Daya Basti Flyover",
+                "mode": "bus",
+                "lst_c": 43.0,
+                "trips_day": 3902,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.2979,
+                  28.70014
+                ]
+              },
+              "properties": {
+                "name": "Ashok Nagar / Meet Nagar",
+                "mode": "bus",
+                "lst_c": 43.7,
+                "trips_day": 3726,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  76.97955,
+                  28.61365
+                ]
+              },
+              "properties": {
+                "name": "Jharoda Crossing Jharoda Road",
+                "mode": "bus",
+                "lst_c": 43.6,
+                "trips_day": 3620,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.0409,
+                  28.68229
+                ]
+              },
+              "properties": {
+                "name": "Swarn Park",
+                "mode": "bus",
+                "lst_c": 43.8,
+                "trips_day": 3560,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.01519,
+                  28.61895
+                ]
+              },
+              "properties": {
+                "name": "Chhathh Ghat Park",
+                "mode": "bus",
+                "lst_c": 43.9,
+                "trips_day": 3493,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  76.97129,
+                  28.61028
+                ]
+              },
+              "properties": {
+                "name": "Prem Nursary",
+                "mode": "bus",
+                "lst_c": 43.6,
+                "trips_day": 3378,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  76.98111,
+                  28.61454
+                ]
+              },
+              "properties": {
+                "name": "Holy Cross School",
+                "mode": "bus",
+                "lst_c": 43.5,
+                "trips_day": 3219,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.09045,
+                  28.53452
+                ]
+              },
+              "properties": {
+                "name": "Samalkha Village",
+                "mode": "bus",
+                "lst_c": 43.6,
+                "trips_day": 3157,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.08609,
+                  28.61196
+                ]
+              },
+              "properties": {
+                "name": "Dabri Crossing Dwarka Road",
+                "mode": "bus",
+                "lst_c": 43.2,
+                "trips_day": 3061,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.00739,
+                  28.61632
+                ]
+              },
+              "properties": {
+                "name": "Nangli Sakrawati Crossing",
+                "mode": "bus",
+                "lst_c": 43.4,
+                "trips_day": 2981,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.08061,
+                  28.71244
+                ]
+              },
+              "properties": {
+                "name": "Brahm Shakti Hospital",
+                "mode": "bus",
+                "lst_c": 43.2,
+                "trips_day": 2920,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.06879,
+                  28.68229
+                ]
+              },
+              "properties": {
+                "name": "Sultan Puri Crossing",
+                "mode": "bus",
+                "lst_c": 43.3,
+                "trips_day": 2796,
+                "evidence": "Estimated"
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  77.05427,
+                  28.68228
+                ]
+              },
+              "properties": {
+                "name": "Qamruddin Nagar Terminal",
+                "mode": "bus",
+                "lst_c": 43.0,
+                "trips_day": 2772,
+                "evidence": "Estimated"
+              }
+            }
+          ]
+        },
+        "style": {
+          "fillToken": null,
+          "lineToken": null,
+          "rampProperty": null,
+          "colorProperty": null,
+          "opacity": 1.0,
+          "bloomRing": null
+        },
+        "camera": {
+          "center": [
+            77.209,
+            28.6139
+          ],
+          "zoom": 10.0,
+          "pitch": null,
+          "bearing": null,
+          "bounds": null
+        },
+        "label": "Busiest stops on the hottest surfaces (any)",
+        "legend": null
+      },
+      "methodology": {
+        "formula": "lst_c = mean Landsat 8/9 ST_B10 within 100 m of the stop, from the cloud/shadow-masked median of April-June scenes 2023-2025; hot stop = lst_c ≥ threshold (default city mean + 1 SD over all stops; SD multiple adjustable 0-3); share = Σ trips/day at hot stops / Σ trips/day; stops listed by trips/day",
+        "crs": "EPSG:4326 for display; imagery sampled at 30 m in the Landsat UTM grid",
+        "sources": [
+          "Landsat 8/9 Collection 2 Level 2 (USGS, via Google Earth Engine)",
+          "OTD Delhi bus (DTC)",
+          "DMRC metro"
+        ],
+        "evidence": "Estimated",
+        "caveats": [
+          "Land surface temperature, not air temperature or felt heat; use it as a relative indicator.",
+          "Single late-morning satellite overpass per scene, not a daily maximum.",
+          "Trips per day are scheduled GTFS trips, not observed ridership.",
+          "The default threshold is relative to Delhi's own distribution, so it always flags the hottest part of the city."
+        ]
+      }
+    }
+  ]
+}

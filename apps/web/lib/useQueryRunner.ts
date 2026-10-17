@@ -21,6 +21,7 @@ import {
   type QueryIntent,
 } from "./demo/queries";
 import { APP_MODE } from "./mode";
+import { buildRecorded } from "./demo/recorded";
 import { liveWithFallback, replay } from "./demo/stream";
 import type { StopsData } from "./data/useStopsData";
 
@@ -126,7 +127,9 @@ export function useQueryRunner({
                 ? buildDensityRank()
                 : intent === "scenario"
                   ? buildScenario(stops, scenarioPoint, 800)
-                  : buildUnknown();
+                  : intent === "heat" || intent === "coverage_gap" || intent === "refusal"
+                    ? buildRecorded(intent)
+                    : buildUnknown();
 
 
       // Archive the prior turn's cards before resetting so evidence accumulates

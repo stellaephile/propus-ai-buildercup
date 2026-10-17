@@ -1,0 +1,25 @@
+{
+  "question": "What is the air quality in Dwarka?",
+  "recordedAt": "2026-10-17",
+  "steps": [
+    "Analysing your question..."
+  ],
+  "results": [
+    {
+      "payload": {
+        "kind": "stat_cards",
+        "cards": [
+          {
+            "label": "Not available in Propus data",
+            "value": "I do not have data on air quality.",
+            "unit": null,
+            "evidence": "Observed",
+            "alert": null,
+            "note": null
+          }
+        ]
+      },
+      "methodology": null
+    }
+  ]
+}

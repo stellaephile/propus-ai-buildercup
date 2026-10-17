@@ -29,8 +29,14 @@ gcloud artifacts repositories describe "${REPO}" --project "${PROJECT}" --locati
 
 gcloud iam service-accounts describe "${SA}" --project "${PROJECT}" >/dev/null 2>&1 \
   || gcloud iam service-accounts create "${SA_NAME}" --project "${PROJECT}" --display-name "Propus Cloud Run"
+# A new service account can take a few seconds to become visible to IAM, so retry.
 for role in roles/aiplatform.user roles/datastore.user roles/secretmanager.secretAccessor; do
-  gcloud projects add-iam-policy-binding "${PROJECT}" --member "serviceAccount:${SA}" --role "${role}" --condition=None >/dev/null
+  for attempt in 1 2 3 4 5 6; do
+    gcloud projects add-iam-policy-binding "${PROJECT}" --member "serviceAccount:${SA}" \
+      --role "${role}" --condition=None >/dev/null 2>&1 && break
+    [[ "${attempt}" == 6 ]] && { echo "could not grant ${role} to ${SA}"; exit 1; }
+    sleep 10
+  done
 done
 
 echo "== API"

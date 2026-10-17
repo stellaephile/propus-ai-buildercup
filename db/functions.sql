@@ -414,3 +414,170 @@ BEGIN
     LIMIT 1;
 END;
 $$;
+
+
+-- ============================================================================
+-- Sustainability module (AI Builder Cup 2026) — docs/DECISIONS.md D6–D16.
+-- Both read only precomputed tables (derived.pop_cells, derived.transit_points,
+-- derived.stop_heat); distances were computed in EPSG:32643 at load time.
+-- Each returns one JSON object so a city summary is present even when the
+-- ranked list is empty.
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- fn_coverage_gap — population farther than a walk radius from transit, plus
+-- the largest unserved 1 km clusters. Straight-line distance, WorldPop 100 m
+-- cell centres (Estimated). Radii default to 500 m bus / 800 m metro (D15).
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_coverage_gap(
+    p_bus_radius_m   INTEGER DEFAULT 500,
+    p_metro_radius_m INTEGER DEFAULT 800,
+    p_mode           TEXT    DEFAULT 'any',
+    p_top_n          INTEGER DEFAULT 10
+)
+RETURNS JSON
+LANGUAGE plpgsql
+STABLE
+SET search_path = public, extensions, pg_catalog
+AS $$
+DECLARE
+    v_bus_r   INTEGER := LEAST(GREATEST(COALESCE(p_bus_radius_m, 500), 200), 1500);
+    v_metro_r INTEGER := LEAST(GREATEST(COALESCE(p_metro_radius_m, 800), 200), 1500);
+    v_mode    TEXT    := lower(COALESCE(p_mode, 'any'));
+    v_top_n   INTEGER := LEAST(GREATEST(COALESCE(p_top_n, 10), 1), 25);
+    v_result  JSON;
+BEGIN
+    IF v_mode NOT IN ('any', 'bus', 'metro') THEN
+        RAISE EXCEPTION 'mode must be any, bus or metro (got %)', p_mode;
+    END IF;
+
+    WITH cells AS (
+        SELECT c.pop, c.geom_utm,
+               CASE v_mode WHEN 'bus'   THEN c.dist_bus_m
+                           WHEN 'metro' THEN c.dist_metro_m
+                           ELSE c.dist_any_m END AS dist_m,
+               CASE v_mode WHEN 'bus'   THEN c.dist_bus_m > v_bus_r
+                           WHEN 'metro' THEN c.dist_metro_m > v_metro_r
+                           ELSE c.dist_bus_m > v_bus_r AND c.dist_metro_m > v_metro_r
+               END AS unserved
+        FROM derived.pop_cells c
+    ),
+    totals AS (
+        SELECT SUM(pop) AS total_pop, COALESCE(SUM(pop) FILTER (WHERE unserved), 0) AS unserved_pop
+        FROM cells
+    ),
+    clusters AS (
+        SELECT ROUND(SUM(pop))::int AS unserved_pop,
+               COUNT(*)::int AS cells,
+               ROUND(AVG(dist_m))::int AS avg_dist_m,
+               ST_Transform(ST_Centroid(ST_Collect(geom_utm)), 4326) AS centre
+        FROM cells
+        WHERE unserved
+        GROUP BY ST_SnapToGrid(geom_utm, 1000)
+        ORDER BY SUM(pop) DESC
+        LIMIT v_top_n
+    )
+    SELECT json_build_object(
+        'mode', v_mode,
+        'bus_radius_m', v_bus_r,
+        'metro_radius_m', v_metro_r,
+        'total_population', ROUND(t.total_pop)::bigint,
+        'unserved_population', ROUND(t.unserved_pop)::bigint,
+        'unserved_share_pct', ROUND((100 * t.unserved_pop / NULLIF(t.total_pop, 0))::numeric, 1),
+        'clusters', COALESCE((
+            SELECT json_agg(json_build_object(
+                       'rank', rn, 'unserved_pop', unserved_pop, 'cells', cells,
+                       'avg_dist_m', avg_dist_m,
+                       'lon', ROUND(ST_X(centre)::numeric, 5),
+                       'lat', ROUND(ST_Y(centre)::numeric, 5)) ORDER BY rn)
+            FROM (SELECT *, ROW_NUMBER() OVER (ORDER BY unserved_pop DESC) AS rn FROM clusters) r
+        ), '[]'::json)
+    )
+    INTO v_result
+    FROM totals t;
+
+    RETURN v_result;
+END;
+$$;
+
+
+-- ----------------------------------------------------------------------------
+-- fn_stop_heat_exposure — transit points on the hottest surfaces, busiest
+-- first. Landsat 8/9 summer median LST within 100 m (Estimated; land surface,
+-- not air temperature). Default threshold = city mean + 1 SD of all transit
+-- point LST (D16); pass p_threshold_c for a fixed °C cut (clamped 30–60).
+-- trips_day = scheduled trips in the GTFS feed, not ridership.
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_stop_heat_exposure(
+    p_threshold_c NUMERIC DEFAULT NULL,
+    p_min_trips   INTEGER DEFAULT 0,
+    p_mode        TEXT    DEFAULT 'any',
+    p_limit       INTEGER DEFAULT 20
+)
+RETURNS JSON
+LANGUAGE plpgsql
+STABLE
+SET search_path = public, extensions, pg_catalog
+AS $$
+DECLARE
+    v_mode      TEXT    := lower(COALESCE(p_mode, 'any'));
+    v_min_trips INTEGER := GREATEST(COALESCE(p_min_trips, 0), 0);
+    v_limit     INTEGER := LEAST(GREATEST(COALESCE(p_limit, 20), 1), 50);
+    v_mean      NUMERIC;
+    v_sd        NUMERIC;
+    v_threshold NUMERIC;
+    v_basis     TEXT;
+    v_result    JSON;
+BEGIN
+    IF v_mode NOT IN ('any', 'bus', 'metro') THEN
+        RAISE EXCEPTION 'mode must be any, bus or metro (got %)', p_mode;
+    END IF;
+
+    SELECT AVG(lst_c), STDDEV_SAMP(lst_c) INTO v_mean, v_sd
+    FROM derived.stop_heat WHERE lst_c IS NOT NULL;
+
+    IF p_threshold_c IS NULL THEN
+        v_threshold := ROUND(v_mean + v_sd, 1);
+        v_basis := 'city mean + 1 SD';
+    ELSE
+        v_threshold := LEAST(GREATEST(p_threshold_c, 30), 60);
+        v_basis := 'fixed';
+    END IF;
+
+    WITH pts AS (
+        SELECT t.point_id, t.name, t.mode, t.trips_day, t.geom, h.lst_c
+        FROM derived.transit_points t
+        JOIN derived.stop_heat h USING (point_id)
+        WHERE h.lst_c IS NOT NULL AND (v_mode = 'any' OR t.mode = v_mode)
+    ),
+    hot AS (
+        SELECT * FROM pts WHERE lst_c >= v_threshold AND trips_day >= v_min_trips
+    )
+    SELECT json_build_object(
+        'mode', v_mode,
+        'threshold_c', v_threshold,
+        'threshold_basis', v_basis,
+        'city_mean_lst_c', ROUND(v_mean, 1),
+        'city_sd_lst_c', ROUND(v_sd, 1),
+        'min_trips', v_min_trips,
+        'stops_total', (SELECT COUNT(*) FROM pts),
+        'stops_above_threshold', (SELECT COUNT(*) FROM hot),
+        'trips_total', (SELECT SUM(trips_day) FROM pts),
+        'trips_at_hot_stops', (SELECT COALESCE(SUM(trips_day), 0) FROM hot),
+        'share_of_daily_trips_at_hot_stops_pct',
+            (SELECT ROUND(100.0 * COALESCE(SUM(trips_day) FILTER (WHERE lst_c >= v_threshold
+                                             AND trips_day >= v_min_trips), 0)
+                          / NULLIF(SUM(trips_day), 0), 1) FROM pts),
+        'stops', COALESCE((
+            SELECT json_agg(json_build_object(
+                       'point_id', point_id, 'name', name, 'mode', mode,
+                       'lst_c', ROUND(lst_c::numeric, 1), 'trips_day', trips_day,
+                       'lon', ROUND(ST_X(geom)::numeric, 5), 'lat', ROUND(ST_Y(geom)::numeric, 5)))
+            FROM (SELECT * FROM hot ORDER BY trips_day DESC, lst_c DESC LIMIT v_limit) h
+        ), '[]'::json)
+    )
+    INTO v_result;
+
+    RETURN v_result;
+END;
+$$;

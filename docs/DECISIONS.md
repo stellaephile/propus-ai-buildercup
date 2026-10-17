@@ -70,3 +70,21 @@ judged URL, but a model outage must not kill the video or the pitch.
 
 **D14 — Post-deadline freeze** (2026-10-17)
 After 18 October 2026: critical fixes only, no new features, never break the live URL.
+
+**D15 — Walk radii: 500 m bus, 800 m metro** (2026-10-17)
+`coverage_gap` takes separate radii per mode, defaulting to 500 m (bus) and 800 m (metro),
+the same defaults as `fn_pop_walk_access`. Basis: India's National TOD Policy (MoHUA) sets
+the station influence zone at 500–800 m / 10–12 min walk; ITDP's TOD Standard prefers
+< 500 m. A 2015 DMRC rider survey (Ann, Jiang & Yamamoto, JTLU) found median metro access
+walks of 600 m and 85th percentile of 1,000–1,500 m, so 1 km is offered as a sensitivity
+value, not a default. Radii are clamped to 200–1,500 m.
+
+**D16 — Heat threshold is relative: city mean + 1 SD** (2026-10-17)
+`stop_heat_exposure` defaults to stops whose LST ≥ mean + 1 standard deviation of all
+transit-point LST (currently 41.3 + 1.7, rounded to 43.0 °C: 705 stops, 12.8% of daily trips). A fixed
+°C threshold remains an optional argument (clamped 30–60). Basis: thermal-stress thresholds
+in the literature (e.g. UTCI 26 / 32 °C bands for active travel) are defined on felt-heat
+indices, not satellite LST, and the LST–air temperature relationship varies with urban form
+and season, so no absolute LST value can be called "dangerous". Surface-UHI studies zone
+heat relative to the city's own mean and SD. Wording rule: "among the hottest surfaces in
+Delhi", never "extreme heat". The plan's 45 °C default caught only 81 stops (0.8% of trips).

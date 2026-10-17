@@ -47,6 +47,7 @@ GRANT SELECT ON
     gtfs_metro.shapes, gtfs_metro.calendar,
     derived.ward_metrics, derived.route_stops, derived.stop_hourly_frequency,
     derived.route_geometries,
+    derived.transit_points, derived.pop_cells, derived.stop_heat,
     embeddings.stop_embeddings
 TO propus_agent_ro;
 
@@ -67,5 +68,7 @@ GRANT EXECUTE ON FUNCTION
     fn_catchment(NUMERIC, NUMERIC, INTEGER),
     fn_ward_choropleth(),
     fn_reverse_geocode(NUMERIC, NUMERIC, INTEGER),
-    fn_pop_walk_access(INTEGER, INTEGER)
+    fn_pop_walk_access(INTEGER, INTEGER),
+    fn_coverage_gap(INTEGER, INTEGER, TEXT, INTEGER),
+    fn_stop_heat_exposure(NUMERIC, INTEGER, TEXT, INTEGER)
 TO propus_agent_ro;

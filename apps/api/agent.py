@@ -382,7 +382,7 @@ TOOL ROUTING:
   metro_radius_m=800) (defaults are 500m walk to a bus stop / 800m walk to a
   metro station; override either if the user names a distance, e.g. "within
   300m of a bus stop"). Do not confuse with get_metro_catchment/
-  simulate_new_stop_catchment, which are for ONE station/point, not city-wide.
+  simulate_network_change, which are for ONE station/point, not city-wide.
 - "What share / how many people live MORE THAN X m from transit", "who is
   far from transit", "biggest areas without a metro within 1 km", "coverage
   gaps" → coverage_gap(bus_radius_m=500, metro_radius_m=800, mode, top_n)
@@ -407,8 +407,8 @@ TOOL ROUTING:
 - "Metro [station] catchment"          → get_metro_catchment(station_name) (always draws
   the combined 500m + 800m rings, not a single radius — override
   bus_radius_m/metro_radius_m only if the user names different distances)
-- "If a metro/bus stop is added at X"  → simulate_new_stop_catchment(lon, lat) (same
-  combined 500m + 800m rings as get_metro_catchment)
+- "If a metro/bus stop is added at X"  → simulate_network_change(add_at=["lon,lat" or ward
+  name], add_mode) (reports people newly covered and draws the new stop's walk buffer)
 - "Frequency at stop [id]"             → get_frequency_at_stop(stop_id, start, end)
 - "Bus stops far from metro"           → find_multimodal_gaps(max_distance_m)
 - "Where is [area]? / centroid of [area]" → geocode_neighbourhood(name)
@@ -793,7 +793,7 @@ def get_pop_walk_access(bus_radius_m: int = 500, metro_radius_m: int = 800) -> d
     to transit", "population within walking distance of a bus/metro stop",
     "on-foot access to public transit" — all route here. This is a CITY-WIDE
     aggregate; for the catchment/population reachable around ONE specific
-    station or point, use get_metro_catchment or simulate_new_stop_catchment
+    station or point, use get_metro_catchment or simulate_network_change
     instead.
 
     Args:
@@ -1517,7 +1517,7 @@ TOOLS = [
     get_route_coverage,
     compare_transit_access,
     get_metro_catchment,
-    simulate_new_stop_catchment,
+    simulate_network_change,
     get_frequency_at_stop,
     find_multimodal_gaps,
     get_ward_rs_profile,
@@ -1541,7 +1541,7 @@ SIMPLE_TOOLS = [
     stop_heat_exposure,
     compare_transit_access,
     get_metro_catchment,
-    simulate_new_stop_catchment,
+    simulate_network_change,
     get_ward_rs_profile,
     reverse_geocode,
     geocode_neighbourhood,
@@ -1581,7 +1581,7 @@ Routing:
 - air quality / ridership / income / felt heat → no tool; say you lack that data
 - compare ward A vs ward B           → compare_transit_access
 - catchment around a metro station   → get_metro_catchment (combined 500m + 800m rings)
-- new-stop scenario at a lon/lat     → simulate_new_stop_catchment (same combined rings)
+- new-stop scenario at a lon/lat     → simulate_network_change (add_at=["lon,lat"])
 - "tell me about [area]"             → get_ward_rs_profile
 - "what area is at lat/lon?"         → reverse_geocode
 - "where is [area]? / coordinates"   → geocode_neighbourhood

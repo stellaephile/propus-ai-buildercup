@@ -11,6 +11,11 @@ RUN pip install --upgrade pip && pip install -r apps/api/requirements.txt
 
 COPY apps/api apps/api
 
+# Fail the build, not the first request, if the app cannot be imported. main.py
+# loads agent.py lazily, so import both: a tool list naming a function that no
+# longer exists once reached production as a live outage.
+RUN python -c "import apps.api.main, apps.api.agent"
+
 # Cloud Run injects PORT. Credentials come from the service account (Vertex AI,
 # Firestore) and Secret Manager (AGENT_DATABASE_URL); nothing is baked in.
 CMD exec uvicorn apps.api.main:app --host 0.0.0.0 --port ${PORT:-8080}

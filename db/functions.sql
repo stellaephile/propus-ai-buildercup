@@ -505,14 +505,18 @@ $$;
 -- fn_stop_heat_exposure — transit points on the hottest surfaces, busiest
 -- first. Landsat 8/9 summer median LST within 100 m (Estimated; land surface,
 -- not air temperature). Default threshold = city mean + 1 SD of all transit
--- point LST (D16); pass p_threshold_c for a fixed °C cut (clamped 30–60).
--- trips_day = scheduled trips in the GTFS feed, not ridership.
+-- point LST (D16); p_sd sets how many SDs above the mean (0–3, default 1.0,
+-- D18); pass p_threshold_c for a fixed °C cut (clamped 30–60), which overrides
+-- p_sd. trips_day = scheduled trips in the GTFS feed, not ridership.
 -- ----------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS fn_stop_heat_exposure(NUMERIC, INTEGER, TEXT, INTEGER);
+
 CREATE OR REPLACE FUNCTION fn_stop_heat_exposure(
     p_threshold_c NUMERIC DEFAULT NULL,
     p_min_trips   INTEGER DEFAULT 0,
     p_mode        TEXT    DEFAULT 'any',
-    p_limit       INTEGER DEFAULT 20
+    p_limit       INTEGER DEFAULT 20,
+    p_sd          NUMERIC DEFAULT 1.0
 )
 RETURNS JSON
 LANGUAGE plpgsql
@@ -524,21 +528,24 @@ DECLARE
     v_min_trips INTEGER := GREATEST(COALESCE(p_min_trips, 0), 0);
     v_limit     INTEGER := LEAST(GREATEST(COALESCE(p_limit, 20), 1), 50);
     v_mean      NUMERIC;
-    v_sd        NUMERIC;
+    v_sd_city   NUMERIC;
+    v_sd        NUMERIC := LEAST(GREATEST(COALESCE(p_sd, 1.0), 0), 3);
     v_threshold NUMERIC;
     v_basis     TEXT;
+    v_sd_used   NUMERIC;
     v_result    JSON;
 BEGIN
     IF v_mode NOT IN ('any', 'bus', 'metro') THEN
         RAISE EXCEPTION 'mode must be any, bus or metro (got %)', p_mode;
     END IF;
 
-    SELECT AVG(lst_c), STDDEV_SAMP(lst_c) INTO v_mean, v_sd
+    SELECT AVG(lst_c), STDDEV_SAMP(lst_c) INTO v_mean, v_sd_city
     FROM derived.stop_heat WHERE lst_c IS NOT NULL;
 
     IF p_threshold_c IS NULL THEN
-        v_threshold := ROUND(v_mean + v_sd, 1);
-        v_basis := 'city mean + 1 SD';
+        v_threshold := ROUND(v_mean + v_sd * v_sd_city, 1);
+        v_basis := 'city mean + ' || TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM v_sd::numeric(4,2)::text)) || ' SD';
+        v_sd_used := v_sd;
     ELSE
         v_threshold := LEAST(GREATEST(p_threshold_c, 30), 60);
         v_basis := 'fixed';
@@ -557,11 +564,14 @@ BEGIN
         'mode', v_mode,
         'threshold_c', v_threshold,
         'threshold_basis', v_basis,
+        'threshold_sd', v_sd_used,
         'city_mean_lst_c', ROUND(v_mean, 1),
-        'city_sd_lst_c', ROUND(v_sd, 1),
+        'city_sd_lst_c', ROUND(v_sd_city, 1),
         'min_trips', v_min_trips,
         'stops_total', (SELECT COUNT(*) FROM pts),
         'stops_above_threshold', (SELECT COUNT(*) FROM hot),
+        'share_of_stops_above_threshold_pct',
+            (SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE lst_c >= v_threshold) / NULLIF(COUNT(*), 0), 1) FROM pts),
         'trips_total', (SELECT SUM(trips_day) FROM pts),
         'trips_at_hot_stops', (SELECT COALESCE(SUM(trips_day), 0) FROM hot),
         'share_of_daily_trips_at_hot_stops_pct',

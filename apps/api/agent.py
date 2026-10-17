@@ -376,8 +376,10 @@ TOOL ROUTING:
   WorldPop 100 m cells, so it is the finer-grained answer for population
   BEYOND walking distance and for WHERE the gaps are.
 - "Hot stops" / "stops in extreme heat" / "busiest stops on the hottest
-  surfaces" / "share of trips at hot stops" → stop_heat_exposure(mode, limit,
-  min_trips). Leave threshold_c UNSET unless the user names a temperature.
+  surfaces" / "share of trips at hot stops" → stop_heat_exposure(sd, mode,
+  limit, min_trips). sd=1.0 by default; raise it (1.5, 2.0) for "only the
+  hottest", lower it (0.5) for a looser cut. Leave threshold_c UNSET unless
+  the user names a temperature.
   It is Landsat LAND SURFACE temperature (relative indicator), not air
   temperature - say so, and never call these stops "extreme" or "dangerous".
 - Air quality, ridership counts, income, felt heat / UTCI, shade or shelter
@@ -792,6 +794,7 @@ STOP_HEAT_METHOD = (
 
 
 def stop_heat_exposure(
+    sd: float = 1.0,
     threshold_c: float | None = None,
     min_trips: int = 0,
     mode: str = "any",
@@ -807,10 +810,12 @@ def stop_heat_exposure(
     hottest surfaces in Delhi", never "extreme" or "dangerous" heat.
 
     Args:
+        sd: How many standard deviations above the city mean counts as hot
+            (0-3, default 1.0 = about 43 degC; 0.5 hotter-than-average,
+            1.5 or 2.0 = only the very hottest stops). Use it for "hotter",
+            "only the hottest", "less strict", "2 SD" style requests.
         threshold_c: Optional fixed surface-temperature cut in degC (clamped
-            30-60). OMIT it unless the user names a number: the default is
-            relative - stops at or above the city mean + 1 standard deviation
-            of all stop surface temperatures (currently about 43 degC).
+            30-60). OMIT it unless the user names a temperature; it overrides sd.
         min_trips: Only stops with at least this many scheduled trips per day.
         mode: 'any', 'bus' or 'metro'.
         limit: Number of stops to return, busiest first (1-50).
@@ -822,17 +827,19 @@ def stop_heat_exposure(
         ridership. Report only these numbers and state the method line.
     """
     r = _q(
-        "SELECT fn_stop_heat_exposure(:th, :mt, :mode, :lim) AS r",
-        {"th": threshold_c, "mt": min_trips, "mode": mode, "lim": limit},
+        "SELECT fn_stop_heat_exposure(:th, :mt, :mode, :lim, :sd) AS r",
+        {"th": threshold_c, "mt": min_trips, "mode": mode, "lim": limit, "sd": sd},
     )[0]["r"]
     return {
         "mode": r["mode"],
         "threshold_c": r["threshold_c"],
         "threshold_basis": r["threshold_basis"],
+        "threshold_sd": r["threshold_sd"],
         "city_mean_lst_c": r["city_mean_lst_c"],
         "city_sd_lst_c": r["city_sd_lst_c"],
         "stops_total": r["stops_total"],
         "stops_above_threshold": r["stops_above_threshold"],
+        "share_of_stops_above_threshold_pct": r["share_of_stops_above_threshold_pct"],
         "share_of_daily_trips_at_hot_stops_pct": r["share_of_daily_trips_at_hot_stops_pct"],
         "top_stops": r["stops"],
         "method": STOP_HEAT_METHOD,

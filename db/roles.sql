@@ -70,5 +70,5 @@ GRANT EXECUTE ON FUNCTION
     fn_reverse_geocode(NUMERIC, NUMERIC, INTEGER),
     fn_pop_walk_access(INTEGER, INTEGER),
     fn_coverage_gap(INTEGER, INTEGER, TEXT, INTEGER),
-    fn_stop_heat_exposure(NUMERIC, INTEGER, TEXT, INTEGER)
+    fn_stop_heat_exposure(NUMERIC, INTEGER, TEXT, INTEGER, NUMERIC)
 TO propus_agent_ro;

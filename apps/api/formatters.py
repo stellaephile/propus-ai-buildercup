@@ -589,8 +589,10 @@ def format_stop_heat_exposure(response: dict, args: dict) -> list[PropusResult]:
     th = response.get("threshold_c")
     basis = response.get("threshold_basis")
     mode = response.get("mode", "any")
-    rule = (f"City mean + 1 SD ({response.get('city_mean_lst_c')} + {response.get('city_sd_lst_c')} °C)"
-            if basis == "city mean + 1 SD" else "Fixed threshold")
+    sd_used = response.get("threshold_sd")
+    top_pct = response.get("share_of_stops_above_threshold_pct")
+    rule = (f"{basis} ({response.get('city_mean_lst_c')} + {sd_used:g} × {response.get('city_sd_lst_c')} °C)"
+            if sd_used is not None else "Fixed threshold")
     stops = response.get("top_stops") or []
     share = response.get("share_of_daily_trips_at_hot_stops_pct")
 
@@ -600,7 +602,8 @@ def format_stop_heat_exposure(response: dict, args: dict) -> list[PropusResult]:
     stats = StatCardsResult(cards=[
         StatCard(label="Stops on the hottest surfaces", value=str(response.get("stops_above_threshold", 0)),
                  evidence="Estimated", alert=True,
-                 note=f"Surface ≥ {th} °C · {rule} · of {response.get('stops_total', 0)} stops"),
+                 note=(f"Surface ≥ {th} °C · {rule} · top {top_pct}% of {response.get('stops_total', 0)} stops"
+                       if top_pct is not None else f"Surface ≥ {th} °C · {rule}")),
         StatCard(label="Daily trips calling at those stops", value=f"{share:.1f}" if share is not None else "N/A",
                  unit="%", evidence="Estimated", alert=True,
                  note="Scheduled GTFS trips, not ridership"),
@@ -637,7 +640,7 @@ STOP_HEAT_METHODOLOGY = Methodology(
     formula=(
         "lst_c = mean Landsat 8/9 ST_B10 within 100 m of the stop, from the cloud/shadow-masked median of "
         "April-June scenes 2023-2025; hot stop = lst_c ≥ threshold (default city mean + 1 SD over all "
-        "stops); share = Σ trips/day at hot stops / Σ trips/day; stops listed by trips/day"
+        "stops; SD multiple adjustable 0-3); share = Σ trips/day at hot stops / Σ trips/day; stops listed by trips/day"
     ),
     crs="EPSG:4326 for display; imagery sampled at 30 m in the Landsat UTM grid",
     sources=["Landsat 8/9 Collection 2 Level 2 (USGS, via Google Earth Engine)", "OTD Delhi bus (DTC)", "DMRC metro"],

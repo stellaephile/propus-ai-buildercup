@@ -375,6 +375,13 @@ TOOL ROUTING:
   (mode='metro' with metro_radius_m=1000 for "no metro within 1 km"). Uses
   WorldPop 100 m cells, so it is the finer-grained answer for population
   BEYOND walking distance and for WHERE the gaps are.
+- "Hot stops" / "stops in extreme heat" / "busiest stops on the hottest
+  surfaces" / "share of trips at hot stops" → stop_heat_exposure(mode, limit,
+  min_trips). Leave threshold_c UNSET unless the user names a temperature.
+  It is Landsat LAND SURFACE temperature (relative indicator), not air
+  temperature - say so, and never call these stops "extreme" or "dangerous".
+- Air quality, ridership counts, income, felt heat / UTCI, shade or shelter
+  inventory: NO tool has this data. Say you do not have it; never estimate.
 - "How far is [area] from metro?"      → get_ward_rs_profile(area_name)
 - "Tell me about [area]"               → get_ward_rs_profile(area_name)
 - "Compare [A] vs [B]"                 → compare_transit_access(A, B)
@@ -775,6 +782,60 @@ def coverage_gap(
         "unserved_share_pct": r["unserved_share_pct"],
         "top_gap_clusters": r["clusters"],
         "method": COVERAGE_GAP_METHOD,
+    }
+
+
+STOP_HEAT_METHOD = (
+    "Landsat 8/9 Collection 2 summer (Apr-Jun 2023-25) median land surface temperature, "
+    "mean within 100 m of each stop"
+)
+
+
+def stop_heat_exposure(
+    threshold_c: float | None = None,
+    min_trips: int = 0,
+    mode: str = "any",
+    limit: int = 20,
+) -> dict:
+    """Which transit stops sit on the hottest surfaces, busiest first, and what
+    share of daily trips call at them. Use for "hot stops", "stops in extreme
+    heat", "which busy stops are on the hottest surfaces", "share of trips at
+    hot stops", "heat exposure at bus stops / metro stations".
+
+    Heat values are LAND SURFACE temperature from Landsat, a relative indicator
+    - NOT air temperature or felt heat. Always say so, and say "among the
+    hottest surfaces in Delhi", never "extreme" or "dangerous" heat.
+
+    Args:
+        threshold_c: Optional fixed surface-temperature cut in degC (clamped
+            30-60). OMIT it unless the user names a number: the default is
+            relative - stops at or above the city mean + 1 standard deviation
+            of all stop surface temperatures (currently about 43 degC).
+        min_trips: Only stops with at least this many scheduled trips per day.
+        mode: 'any', 'bus' or 'metro'.
+        limit: Number of stops to return, busiest first (1-50).
+
+    Returns:
+        threshold_c and threshold_basis, stops_above_threshold, stops_total,
+        share_of_daily_trips_at_hot_stops_pct and top_stops (name, mode,
+        lst_c, trips_day, lon, lat). Trips are scheduled GTFS trips, not
+        ridership. Report only these numbers and state the method line.
+    """
+    r = _q(
+        "SELECT fn_stop_heat_exposure(:th, :mt, :mode, :lim) AS r",
+        {"th": threshold_c, "mt": min_trips, "mode": mode, "lim": limit},
+    )[0]["r"]
+    return {
+        "mode": r["mode"],
+        "threshold_c": r["threshold_c"],
+        "threshold_basis": r["threshold_basis"],
+        "city_mean_lst_c": r["city_mean_lst_c"],
+        "city_sd_lst_c": r["city_sd_lst_c"],
+        "stops_total": r["stops_total"],
+        "stops_above_threshold": r["stops_above_threshold"],
+        "share_of_daily_trips_at_hot_stops_pct": r["share_of_daily_trips_at_hot_stops_pct"],
+        "top_stops": r["stops"],
+        "method": STOP_HEAT_METHOD,
     }
 
 
@@ -1250,6 +1311,7 @@ TOOLS = [
     get_ward_density_ranking,
     get_pop_walk_access,
     coverage_gap,
+    stop_heat_exposure,
     get_route_coverage,
     compare_transit_access,
     get_metro_catchment,
@@ -1274,6 +1336,7 @@ SIMPLE_TOOLS = [
     get_ward_density_ranking,
     get_pop_walk_access,
     coverage_gap,
+    stop_heat_exposure,
     compare_transit_access,
     get_metro_catchment,
     simulate_new_stop_catchment,
@@ -1310,6 +1373,10 @@ Routing:
 - people living MORE THAN X m from transit / far from transit / biggest
   coverage gaps / areas with no metro within 1 km → coverage_gap (mode='any',
   'bus' or 'metro'; e.g. metro_radius_m=1000, mode='metro')
+- hot stops / busiest stops on the hottest surfaces / share of trips at hot
+  stops → stop_heat_exposure (leave threshold_c unset unless a number is
+  given; it is land SURFACE temperature, not air temperature)
+- air quality / ridership / income / felt heat → no tool; say you lack that data
 - compare ward A vs ward B           → compare_transit_access
 - catchment around a metro station   → get_metro_catchment (combined 500m + 800m rings)
 - new-stop scenario at a lon/lat     → simulate_new_stop_catchment (same combined rings)

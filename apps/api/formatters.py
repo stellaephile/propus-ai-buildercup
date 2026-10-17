@@ -579,6 +579,79 @@ COVERAGE_GAP_METHODOLOGY = Methodology(
 
 
 # ---------------------------------------------------------------------------
+# stop_heat_exposure — busiest stops on the hottest surfaces
+# ---------------------------------------------------------------------------
+
+def format_stop_heat_exposure(response: dict, args: dict) -> list[PropusResult]:
+    if "error" in response:
+        return [StatCardsResult(cards=[StatCard(label="Error", value=str(response["error"]), evidence="Calculated", alert=True)])]
+
+    th = response.get("threshold_c")
+    basis = response.get("threshold_basis")
+    mode = response.get("mode", "any")
+    rule = (f"City mean + 1 SD ({response.get('city_mean_lst_c')} + {response.get('city_sd_lst_c')} °C)"
+            if basis == "city mean + 1 SD" else "Fixed threshold")
+    stops = response.get("top_stops") or []
+    share = response.get("share_of_daily_trips_at_hot_stops_pct")
+
+    # LST is satellite-derived and Landsat is a single snapshot, so Estimated
+    # (docs/DECISIONS.md D11). Amber marks the hot-stop count and share only:
+    # that is the underserved/alert reading (§3.4).
+    stats = StatCardsResult(cards=[
+        StatCard(label="Stops on the hottest surfaces", value=str(response.get("stops_above_threshold", 0)),
+                 evidence="Estimated", alert=True,
+                 note=f"Surface ≥ {th} °C · {rule} · of {response.get('stops_total', 0)} stops"),
+        StatCard(label="Daily trips calling at those stops", value=f"{share:.1f}" if share is not None else "N/A",
+                 unit="%", evidence="Estimated", alert=True,
+                 note="Scheduled GTFS trips, not ridership"),
+        StatCard(label="Surface-temperature threshold", value=f"{th}", unit="°C", evidence="Estimated",
+                 note="Land surface temperature, not air temperature"),
+    ])
+    results: list[PropusResult] = [stats]
+    if not stops:
+        return results
+
+    results.append(DataTableResult(
+        columns=["Stop", "Mode", "Surface temp (°C)", "Trips/day", "Lon", "Lat"],
+        rows=[[s["name"], s["mode"], s["lst_c"], s["trips_day"], s["lon"], s["lat"]] for s in stops],
+        evidence="Estimated",
+        alertRows=list(range(len(stops))),
+    ))
+    fc = {"type": "FeatureCollection", "features": [{
+        "type": "Feature",
+        "geometry": {"type": "Point", "coordinates": [s["lon"], s["lat"]]},
+        "properties": {"name": s["name"], "mode": s["mode"], "lst_c": s["lst_c"],
+                       "trips_day": s["trips_day"], "evidence": "Estimated"},
+    } for s in stops]}
+    results.append(MapLayerResult(
+        layer="points",
+        geojson=fc,
+        style=MapStyleSpec(opacity=1),
+        camera={"center": DELHI_CENTER, "zoom": 10},
+        label=f"Busiest stops on the hottest surfaces ({mode})",
+    ))
+    return results
+
+
+STOP_HEAT_METHODOLOGY = Methodology(
+    formula=(
+        "lst_c = mean Landsat 8/9 ST_B10 within 100 m of the stop, from the cloud/shadow-masked median of "
+        "April-June scenes 2023-2025; hot stop = lst_c ≥ threshold (default city mean + 1 SD over all "
+        "stops); share = Σ trips/day at hot stops / Σ trips/day; stops listed by trips/day"
+    ),
+    crs="EPSG:4326 for display; imagery sampled at 30 m in the Landsat UTM grid",
+    sources=["Landsat 8/9 Collection 2 Level 2 (USGS, via Google Earth Engine)", "OTD Delhi bus (DTC)", "DMRC metro"],
+    evidence="Estimated",
+    caveats=[
+        "Land surface temperature, not air temperature or felt heat; use it as a relative indicator.",
+        "Single late-morning satellite overpass per scene, not a daily maximum.",
+        "Trips per day are scheduled GTFS trips, not observed ridership.",
+        "The default threshold is relative to Delhi's own distribution, so it always flags the hottest part of the city.",
+    ],
+)
+
+
+# ---------------------------------------------------------------------------
 # get_route_coverage — route line + stops, colored by DMRC line identity
 # ---------------------------------------------------------------------------
 
@@ -736,6 +809,7 @@ FORMATTERS: dict[str, Callable[[dict, dict], list[PropusResult]]] = {
     "get_ward_density_ranking": format_ward_density_ranking,
     "get_pop_walk_access": format_pop_walk_access,
     "coverage_gap": format_coverage_gap,
+    "stop_heat_exposure": format_stop_heat_exposure,
     "compare_transit_access": format_compare_transit_access,
     "get_route_coverage": format_route_coverage,
     "get_metro_catchment": format_catchment,
@@ -750,6 +824,7 @@ METHODOLOGY: dict[str, Methodology] = {
     "simulate_new_stop_catchment": CATCHMENT_METHODOLOGY,
     "get_pop_walk_access": WALK_ACCESS_METHODOLOGY,
     "coverage_gap": COVERAGE_GAP_METHODOLOGY,
+    "stop_heat_exposure": STOP_HEAT_METHODOLOGY,
 }
 
 

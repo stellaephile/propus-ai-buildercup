@@ -24,12 +24,15 @@ Attribution: © OpenStreetMap contributors
 License URL: https://www.openstreetmap.org/copyright
 Usage: Road network, footpaths, bus stops, buildings, land use polygons for Delhi/NCR
 
-4. Delhi Ward Boundaries (2022 MCD Delimitation)
+4. Delhi Ward Boundaries
 Provider: OpenCity
 URL: https://data.opencity.in/dataset/delhi-wards-information
 License: Open Data Commons Attribution License (ODC-By)
 Attribution: © OpenCity (data.opencity.in)
-Usage: 2022 ward boundary polygons for spatial joins and aggregation
+Usage: Ward boundary polygons for spatial joins and aggregation.
+Contents as loaded (checked 2026-10-18): 290 polygons = 272 numbered MCD wards, 9 NDMC charge areas,
+8 Cantonment charge areas and 1 other. The 272 numbered wards are the delimitation before 2022
+(the 2022 delimitation has 250 wards), so ward names and boundaries may not match the current ones.
 
 5. Delhi Ward Boundaries (Alternate / Backup)
 Provider: DataMeet India

@@ -22,7 +22,7 @@ import { EvidenceTag } from "../EvidenceTag";
 // is: route×direction×variant patterns, not "bus routes".
 const items = [
   { value: NETWORK_TOTALS.busBoardingPoints, label: "bus stops" },
-  { value: NETWORK_TOTALS.wards, label: "MCD wards" },
+  { value: NETWORK_TOTALS.wards, label: "ward areas" },
   { value: NETWORK_TOTALS.busRoutePatterns, label: "bus route patterns" },
   { value: NETWORK_TOTALS.metroStops, label: "metro stations" },
   // metroLines: distinct color-coded lines in our own GTFS feed, not the raw

@@ -349,7 +349,7 @@ known wards:
   Returns the ward polygon's centroid — same LIKE + fuzzy name matching as
   get_ward_rs_profile, so misspellings resolve the same way.
 - Only if geocode_neighbourhood finds no match at all (a landmark or street
-  address, not one of the 290 MCD wards) → geocode_location(query) as a
+  address, not one of the 290 ward areas) → geocode_location(query) as a
   last resort via Google's Geocoding API, then call get_nearby_stops(lat,
   lon) on the result. Never say "location not found" without trying
   geocode_neighbourhood first, then geocode_location. Always state the
@@ -609,7 +609,7 @@ def _google_geocode(query: str, api_key: str) -> dict:
 
 async def geocode_location(query: str) -> dict:
     """Geocode a Delhi landmark or street address via Google's Geocoding API.
-    Fallback for places that are not one of the 290 MCD wards; try
+    Fallback for places that are not one of the 290 ward areas; try
     geocode_neighbourhood first (free, exact, grounded in this DB's polygons).
 
     Args:
@@ -1555,7 +1555,7 @@ GLOSSARY: "PT" = public transit/transport (bus + metro). "Walk access" /
 "walkable" / "on foot" / "within walking distance" all mean the same thing.
 
 Data: 6,880 bus stops (distinct boarding points — never say 10,559, that's raw
-feed rows), 262 metro stops, 11 metro lines, 290 MCD wards with computed
+feed rows), 262 metro stops, 11 metro lines, 290 ward areas with computed
 transit metrics. Don't state a specific "number of bus routes" — the feed has
 no dedup key for routes, unlike stops. Ward names in the DB are ALL-CAPS official
 MCD names; tools handle partial (LIKE) and fuzzy (trigram) matching, so pass

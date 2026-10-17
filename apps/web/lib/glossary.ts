@@ -17,7 +17,7 @@ export const GLOSSARY: { term: string; meaning: string }[] = [
   {
     term: "Ward",
     meaning:
-      "A local administrative area of Delhi, run by the Municipal Corporation of Delhi (MCD). Think of it as a neighbourhood.",
+      "A local administrative area of Delhi: a Municipal Corporation of Delhi (MCD) ward, or an NDMC or Cantonment charge area. Think of it as a neighbourhood.",
   },
   {
     term: "Transit access score",

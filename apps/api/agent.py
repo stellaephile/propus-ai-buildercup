@@ -43,6 +43,7 @@ import asyncio
 import logging
 import os
 import random
+import re
 import uuid
 from collections import OrderedDict
 from pathlib import Path
@@ -157,9 +158,12 @@ def get_engine():
         # The image ships psycopg2 only. A "postgresql+psycopg://" (psycopg 3)
         # URL would make SQLAlchemy import a driver that is not installed, so
         # pin whichever spelling the secret uses to the installed driver.
-        for prefix in ("postgresql+psycopg://", "postgres://"):
-            if db_url.startswith(prefix):
-                db_url = "postgresql://" + db_url[len(prefix):]
+        # Secrets often carry stray whitespace or quotes, which defeated a
+        # plain startswith() check and surfaced as "No module named 'psycopg'".
+        db_url = re.sub(
+            r"^postgres(?:ql)?(?:\+\w+)?://", "postgresql+psycopg2://",
+            db_url.strip().strip("'\""),
+        )
         _engine = create_engine(
             db_url,
             pool_pre_ping=True,
@@ -1063,25 +1067,122 @@ def get_metro_catchment(station_name: str, bus_radius_m: int = 500, metro_radius
     return {"station": s, **_dual_catchment(s["lon"], s["lat"], bus_radius_m, metro_radius_m)}
 
 
-def simulate_new_stop_catchment(lon: float, lat: float, bus_radius_m: int = 500, metro_radius_m: int = 800) -> dict:
-    """Scenario: estimate people newly covered if a stop is added at (lon, lat).
+SCENARIO_METHOD = (
+    "WorldPop 2020 100 m cells; straight-line distance in EPSG:32643; a cell is served when a bus stop "
+    "is within the bus radius or a metro station within the metro radius (or the single mode chosen)"
+)
+_LAT_RANGE, _LON_RANGE = (28.3, 29.0), (76.7, 77.6)
+
+
+def _parse_lonlat(text: str) -> tuple[float, float] | None:
+    """'lon,lat' or 'lat,lon' (either order) inside the Delhi bounding box."""
+    m = re.fullmatch(r"\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*", text or "")
+    if not m:
+        return None
+    a, b = float(m.group(1)), float(m.group(2))
+    for lon, lat in ((a, b), (b, a)):
+        if _LON_RANGE[0] <= lon <= _LON_RANGE[1] and _LAT_RANGE[0] <= lat <= _LAT_RANGE[1]:
+            return lon, lat
+    return None
+
+
+def _resolve_site(text: str) -> dict:
+    """A site for a new stop: coordinates, or a ward/neighbourhood name resolved to a
+    point inside the ward (same matching as geocode_neighbourhood)."""
+    ll = _parse_lonlat(text)
+    if ll:
+        return {"label": text.strip(), "lon": ll[0], "lat": ll[1]}
+    if re.fullmatch(r"\s*-?\d+(?:\.\d+)?\s*[, ]\s*-?\d+(?:\.\d+)?\s*", text or ""):
+        return {"error": f"'{text}' is outside Delhi"}
+    ward_ids, _ = _match_ward_ids(text)
+    if not ward_ids:
+        return {"error": f"No ward or place found matching '{text}'. Give coordinates as 'lon,lat' instead."}
+    row = _q("""
+        SELECT ward_name, ST_X(ST_PointOnSurface(geometry)) AS lon, ST_Y(ST_PointOnSurface(geometry)) AS lat
+        FROM public.wards WHERE ward_id = ANY(:ids) ORDER BY array_position(:ids, ward_id) LIMIT 1
+    """, {"ids": ward_ids})[0]
+    return {"label": row["ward_name"].title(), "lon": round(row["lon"], 6), "lat": round(row["lat"], 6)}
+
+
+def _resolve_closure(text: str) -> dict:
+    """An existing transit point to remove, by point_id or by stop/station name."""
+    rows = _q(
+        "SELECT point_id, name, mode, trips_day FROM derived.transit_points "
+        "WHERE point_id = :t OR name ILIKE :pat ORDER BY (name ILIKE :t) DESC, mode = 'metro' DESC, trips_day DESC LIMIT 6",
+        {"t": text.strip(), "pat": f"%{text.strip()}%"},
+    )
+    if not rows:
+        return {"error": f"No stop or station matching '{text}'"}
+    exact = [r for r in rows if r["name"].lower() == text.strip().lower() or r["point_id"] == text.strip()]
+    pick = exact if len(exact) == 1 else (rows if len(rows) == 1 else None)
+    if pick is None:
+        return {"error": f"'{text}' matches several stops: "
+                         + "; ".join(f"{r['name']} ({r['mode']}, {r['trips_day']} trips/day) id={r['point_id']}" for r in rows[:5])
+                         + ". Ask the user which one, or pass its id."}
+    return pick[0]
+
+
+def simulate_network_change(
+    add_at: list[str] | None = None,
+    add_mode: str = "metro",
+    remove: list[str] | None = None,
+    measure: str = "any",
+    bus_radius_m: int = 500,
+    metro_radius_m: int = 800,
+) -> dict:
+    """WHAT-IF on the stop network: add new stops/stations and/or close existing
+    ones, then report how many people gain or lose walking access. Use for "if a
+    metro station is added at X, how many more people fall within 800m", "what if
+    we close Kashmere Gate", "add two bus stops in Seemapuri", "what happens if
+    these stops are removed", any hypothetical change to the stops.
 
     Args:
-        lon: Candidate stop longitude (WGS84).
-        lat: Candidate stop latitude (WGS84).
-        bus_radius_m: Inner ring radius in metres (default 500).
-        metro_radius_m: Outer ring radius in metres (default 800). Both
-            rings are always shown together, per the headline scenario query.
+        add_at: New stop sites. Each item is a ward/neighbourhood name (e.g.
+            "Sangam Vihar") OR coordinates "lon,lat" (e.g. "77.2375,28.5033").
+            Up to 10. Leave empty if only removing.
+        add_mode: Mode of every added stop: 'metro' (800 m walk) or 'bus' (500 m).
+        remove: Existing stops/stations to close, by name (e.g. "Kashmere Gate")
+            or point_id. Up to 25. Leave empty if only adding.
+        measure: Which access to count: 'any' (bus OR metro - default), 'metro'
+            (metro access only - use for "close a metro station" so people still
+            reached by bus are not hidden), or 'bus'.
+        bus_radius_m: Walk radius to a bus stop in metres (default 500).
+        metro_radius_m: Walk radius to a metro station in metres (default 800).
 
     Returns:
-        Both rings' buffer geometry, stop counts, and WorldPop-derived
-        population estimate for the candidate point — same math as
-        get_metro_catchment, just centred on an arbitrary point rather than
-        an existing station.
+        people_newly_covered, people_losing_coverage, net_change,
+        people_within_new_stops, unserved_share_before_pct and
+        unserved_share_after_pct (population beyond walking distance), the
+        resolved added/removed sites, and a method line. Report only these numbers.
     """
+    adds, notes = [], []
+    for text in add_at or []:
+        site = _resolve_site(text)
+        if "error" in site:
+            return site
+        adds.append(site)
+    closures = []
+    for text in remove or []:
+        pt = _resolve_closure(text)
+        if "error" in pt:
+            return pt
+        closures.append(pt)
+    if not adds and not closures:
+        return {"error": "Give at least one stop to add (add_at) or remove."}
+
+    r = _q(
+        "SELECT fn_network_scenario(CAST(:lons AS float8[]), CAST(:lats AS float8[]), :mode, "
+        "CAST(:rm AS text[]), :b, :m, :ev) AS r",
+        {"lons": [a["lon"] for a in adds], "lats": [a["lat"] for a in adds], "mode": add_mode,
+         "rm": [c["point_id"] for c in closures], "b": bus_radius_m, "m": metro_radius_m, "ev": measure},
+    )[0]["r"]
+    buffer = r.pop("added_buffer", None)
     return {
-        "point": {"lon": lon, "lat": lat},
-        **_dual_catchment(lon, lat, bus_radius_m, metro_radius_m),
+        **r,
+        "added": adds,
+        "removed": closures,
+        "buffer_ref": _stash_geometry(buffer) if buffer else None,
+        "method": SCENARIO_METHOD,
     }
 
 

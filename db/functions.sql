@@ -591,3 +591,167 @@ BEGIN
     RETURN v_result;
 END;
 $$;
+
+
+-- ----------------------------------------------------------------------------
+-- fn_network_scenario — what-if on the stop network (D19). Add stops and/or
+-- remove existing transit points, then compare who is within walking distance
+-- before and after. Exact on derived.pop_cells (WorldPop 100 m cell centres,
+-- straight-line distance, EPSG:32643). A cell is served when a bus stop is
+-- within bus radius OR a metro station is within metro radius — the same rule
+-- as fn_coverage_gap mode 'any'. Only cells within reach of a changed point
+-- can change status, so only those are re-evaluated.
+-- p_add_lon/p_add_lat: parallel arrays of new stops (all of mode p_add_mode).
+-- p_remove_ids: derived.transit_points.point_id values to close.
+-- p_eval_mode: which access to measure - 'any' (bus OR metro), 'bus', or 'metro'
+-- (e.g. 'metro' shows who loses metro access when a station closes, even if
+-- buses still cover them).
+-- ----------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS fn_network_scenario(DOUBLE PRECISION[], DOUBLE PRECISION[], TEXT, TEXT[], INTEGER, INTEGER);
+
+CREATE OR REPLACE FUNCTION fn_network_scenario(
+    p_add_lon        DOUBLE PRECISION[] DEFAULT '{}',
+    p_add_lat        DOUBLE PRECISION[] DEFAULT '{}',
+    p_add_mode       TEXT               DEFAULT 'metro',
+    p_remove_ids     TEXT[]             DEFAULT '{}',
+    p_bus_radius_m   INTEGER            DEFAULT 500,
+    p_metro_radius_m INTEGER            DEFAULT 800,
+    p_eval_mode      TEXT               DEFAULT 'any'
+)
+RETURNS JSON
+LANGUAGE plpgsql
+STABLE
+SET search_path = public, extensions, pg_catalog
+AS $$
+DECLARE
+    v_bus_r    INTEGER := LEAST(GREATEST(COALESCE(p_bus_radius_m, 500), 200), 1500);
+    v_metro_r  INTEGER := LEAST(GREATEST(COALESCE(p_metro_radius_m, 800), 200), 1500);
+    v_max_r    INTEGER := GREATEST(v_bus_r, v_metro_r);
+    v_mode     TEXT    := lower(COALESCE(p_add_mode, 'metro'));
+    v_eval     TEXT    := lower(COALESCE(p_eval_mode, 'any'));
+    v_remove   TEXT[]  := COALESCE(p_remove_ids, '{}');
+    v_n_add    INTEGER := COALESCE(array_length(p_add_lon, 1), 0);
+    v_new_r    INTEGER;
+    v_gained   NUMERIC;
+    v_lost     NUMERIC;
+    v_in_new   NUMERIC;
+    v_total    NUMERIC;
+    v_unserved NUMERIC;
+    v_buffer   JSON;
+    v_removed  JSON;
+    v_missing  JSON;
+BEGIN
+    IF v_mode NOT IN ('bus', 'metro') THEN
+        RAISE EXCEPTION 'add mode must be bus or metro (got %)', p_add_mode;
+    END IF;
+    IF v_n_add <> COALESCE(array_length(p_add_lat, 1), 0) THEN
+        RAISE EXCEPTION 'add longitude and latitude lists must be the same length';
+    END IF;
+    IF v_n_add > 10 OR COALESCE(array_length(v_remove, 1), 0) > 25 THEN
+        RAISE EXCEPTION 'at most 10 added and 25 removed points per scenario';
+    END IF;
+    IF v_eval NOT IN ('any', 'bus', 'metro') THEN
+        RAISE EXCEPTION 'eval mode must be any, bus or metro (got %)', p_eval_mode;
+    END IF;
+    v_new_r := CASE v_mode WHEN 'bus' THEN v_bus_r ELSE v_metro_r END;
+
+    SELECT SUM(pop),
+           COALESCE(SUM(pop) FILTER (WHERE NOT CASE v_eval
+               WHEN 'bus' THEN dist_bus_m <= v_bus_r
+               WHEN 'metro' THEN dist_metro_m <= v_metro_r
+               ELSE dist_bus_m <= v_bus_r OR dist_metro_m <= v_metro_r END), 0)
+    INTO v_total, v_unserved
+    FROM derived.pop_cells;
+
+    WITH added AS (
+        SELECT ST_Transform(ST_SetSRID(ST_MakePoint(t.lon, t.lat), 4326), 32643) AS g
+        FROM unnest(p_add_lon, p_add_lat) AS t(lon, lat)
+    ),
+    removed AS (
+        SELECT geom_utm AS g FROM derived.transit_points WHERE point_id = ANY(v_remove)
+    ),
+    -- indexed joins (GiST on geom_utm), not a per-cell EXISTS scan: the scan
+    -- version took ~2.7 s even for an empty scenario
+    near AS (
+        SELECT c.cell_id FROM derived.pop_cells c JOIN added a ON ST_DWithin(c.geom_utm, a.g, v_max_r)
+        UNION
+        SELECT c.cell_id FROM derived.pop_cells c JOIN removed r ON ST_DWithin(c.geom_utm, r.g, v_max_r)
+    ),
+    cand AS (
+        SELECT c.pop, c.geom_utm, c.dist_bus_m, c.dist_metro_m
+        FROM derived.pop_cells c JOIN near USING (cell_id)
+    ),
+    eval AS (
+        SELECT cand.pop,
+               (cand.dist_bus_m <= v_bus_r) AS bus_before,
+               (cand.dist_metro_m <= v_metro_r) AS metro_before,
+               (
+                   (v_mode = 'bus' AND EXISTS (
+                       SELECT 1 FROM added a WHERE ST_DWithin(cand.geom_utm, a.g, v_bus_r)))
+                OR EXISTS (
+                       SELECT 1 FROM derived.transit_points t
+                       WHERE t.mode = 'bus' AND NOT (t.point_id = ANY(v_remove))
+                         AND ST_DWithin(cand.geom_utm, t.geom_utm, v_bus_r))
+               ) AS bus_after,
+               (
+                   (v_mode = 'metro' AND EXISTS (
+                       SELECT 1 FROM added a WHERE ST_DWithin(cand.geom_utm, a.g, v_metro_r)))
+                OR EXISTS (
+                       SELECT 1 FROM derived.transit_points t
+                       WHERE t.mode = 'metro' AND NOT (t.point_id = ANY(v_remove))
+                         AND ST_DWithin(cand.geom_utm, t.geom_utm, v_metro_r))
+               ) AS metro_after,
+               EXISTS (SELECT 1 FROM added a WHERE ST_DWithin(cand.geom_utm, a.g, v_new_r)) AS in_new
+        FROM cand
+    ),
+    served AS (
+        SELECT pop, in_new,
+               CASE v_eval WHEN 'bus' THEN bus_before WHEN 'metro' THEN metro_before
+                           ELSE bus_before OR metro_before END AS served_before,
+               CASE v_eval WHEN 'bus' THEN bus_after WHEN 'metro' THEN metro_after
+                           ELSE bus_after OR metro_after END AS served_after
+        FROM eval
+    )
+    SELECT COALESCE(SUM(pop) FILTER (WHERE NOT served_before AND served_after), 0),
+           COALESCE(SUM(pop) FILTER (WHERE served_before AND NOT served_after), 0),
+           COALESCE(SUM(pop) FILTER (WHERE in_new), 0)
+    INTO v_gained, v_lost, v_in_new
+    FROM served;
+
+    SELECT CASE WHEN v_n_add = 0 THEN NULL ELSE ST_AsGeoJSON(_simplify_round(ST_Transform(
+               ST_Union(ST_Buffer(ST_Transform(ST_SetSRID(ST_MakePoint(t.lon, t.lat), 4326), 32643), v_new_r, 8)),
+               4326)), 5)::json END
+    INTO v_buffer
+    FROM unnest(p_add_lon, p_add_lat) AS t(lon, lat);
+
+    SELECT COALESCE(json_agg(json_build_object(
+               'point_id', point_id, 'name', name, 'mode', mode,
+               'lon', ROUND(ST_X(geom)::numeric, 5), 'lat', ROUND(ST_Y(geom)::numeric, 5))), '[]'::json)
+    INTO v_removed
+    FROM derived.transit_points WHERE point_id = ANY(v_remove);
+
+    SELECT COALESCE(json_agg(x), '[]'::json) INTO v_missing
+    FROM unnest(v_remove) AS x
+    WHERE NOT EXISTS (SELECT 1 FROM derived.transit_points WHERE point_id = x);
+
+    RETURN json_build_object(
+        'bus_radius_m', v_bus_r,
+        'metro_radius_m', v_metro_r,
+        'add_mode', v_mode,
+        'eval_mode', v_eval,
+        'added_count', v_n_add,
+        'removed', v_removed,
+        'removed_not_found', v_missing,
+        'total_population', ROUND(v_total)::bigint,
+        'people_within_new_stops', ROUND(v_in_new)::bigint,
+        'people_newly_covered', ROUND(v_gained)::bigint,
+        'people_losing_coverage', ROUND(v_lost)::bigint,
+        'net_change', ROUND(v_gained - v_lost)::bigint,
+        'unserved_before', ROUND(v_unserved)::bigint,
+        'unserved_after', ROUND(v_unserved - v_gained + v_lost)::bigint,
+        'unserved_share_before_pct', ROUND((100 * v_unserved / NULLIF(v_total, 0))::numeric, 2),
+        'unserved_share_after_pct', ROUND((100 * (v_unserved - v_gained + v_lost) / NULLIF(v_total, 0))::numeric, 2),
+        'added_buffer', v_buffer
+    );
+END;
+$$;

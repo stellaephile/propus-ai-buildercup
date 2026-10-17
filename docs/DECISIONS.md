@@ -88,3 +88,15 @@ indices, not satellite LST, and the LST–air temperature relationship varies wi
 and season, so no absolute LST value can be called "dangerous". Surface-UHI studies zone
 heat relative to the city's own mean and SD. Wording rule: "among the hottest surfaces in
 Delhi", never "extreme heat". The plan's 45 °C default caught only 81 stops (0.8% of trips).
+
+**D17 — No graph neural network for QA or tool routing** (2026-10-17)
+Tool selection stays with Gemini function calling plus the explicit routing rules in the
+system prompt (a hand-written tool graph: e.g. `geocode_neighbourhood` before
+`geocode_location`, `get_ward_rs_profile` first for area names). Reason: graph-learning
+planners (GNN4TaskPlan arXiv 2405.19119, NaviAgent arXiv 2506.19500, GRAFT arXiv
+2605.11706) gain most on large tool graphs and long dependency chains, and need recorded
+query→tool-sequence traces to train on. Propus has 17 tools, mostly one call per question,
+and no trace data. Speed comes from precomputed PostGIS functions, one tool call per answer,
+`gemini-2.5-flash`, Cloud Run `min-instances=1`, and demo mode. Correctness is checked by
+the golden question set (S9), which asserts tool order and numeric grounding. Revisit a
+learned router after the hackathon, using the Firestore query log as training data.

@@ -507,6 +507,78 @@ WALK_ACCESS_METHODOLOGY = Methodology(
 
 
 # ---------------------------------------------------------------------------
+# coverage_gap — population beyond walking distance + largest unserved clusters
+# ---------------------------------------------------------------------------
+
+def format_coverage_gap(response: dict, args: dict) -> list[PropusResult]:
+    if "error" in response:
+        return [StatCardsResult(cards=[StatCard(label="Error", value=str(response["error"]), evidence="Calculated", alert=True)])]
+
+    bus_r = response.get("bus_radius_m", 500)
+    metro_r = response.get("metro_radius_m", 800)
+    mode = response.get("mode", "any")
+    reach = {
+        "any": f"{bus_r}m of a bus stop and {metro_r}m of a metro station",
+        "bus": f"{bus_r}m of a bus stop",
+        "metro": f"{metro_r}m of a metro station",
+    }[mode]
+    pct = response.get("unserved_share_pct")
+    clusters = response.get("top_gap_clusters") or []
+
+    # WorldPop is modelled population, so every population figure here is
+    # Estimated (docs/DECISIONS.md D9); the share is an underserved figure,
+    # which is amber's legitimate use (§3.4).
+    stats = StatCardsResult(cards=[
+        StatCard(label="Population beyond walking distance", value=f"{pct:.1f}" if pct is not None else "N/A",
+                 unit="%", evidence="Estimated", alert=True, note=f"Farther than {reach}"),
+        StatCard(label="People beyond walking distance", value=str(response.get("unserved_population", 0)),
+                 unit="people", evidence="Estimated"),
+        StatCard(label="Delhi population (mapped wards)", value=str(response.get("total_population", 0)),
+                 unit="people", evidence="Estimated"),
+    ])
+    results: list[PropusResult] = [stats]
+    if not clusters:
+        return results
+
+    results.append(DataTableResult(
+        columns=["Rank", "Unserved people", "Avg distance (m)", "Lon", "Lat"],
+        rows=[[c["rank"], c["unserved_pop"], c["avg_dist_m"], c["lon"], c["lat"]] for c in clusters],
+        evidence="Estimated",
+    ))
+    fc = {"type": "FeatureCollection", "features": [{
+        "type": "Feature",
+        "geometry": {"type": "Point", "coordinates": [c["lon"], c["lat"]]},
+        "properties": {"name": f"Gap #{c['rank']}", "unserved_pop": c["unserved_pop"],
+                       "avg_dist_m": c["avg_dist_m"], "evidence": "Estimated"},
+    } for c in clusters]}
+    results.append(MapLayerResult(
+        layer="points",
+        geojson=fc,
+        style=MapStyleSpec(opacity=1),
+        camera={"center": DELHI_CENTER, "zoom": 10},
+        label=f"Largest coverage gaps (1 km clusters, {mode})",
+    ))
+    return results
+
+
+COVERAGE_GAP_METHODOLOGY = Methodology(
+    formula=(
+        "unserved cell = nearest bus stop location > bus_radius_m AND nearest metro station > metro_radius_m "
+        "(mode 'any'; one condition for 'bus'/'metro'); share = Σ pop(unserved) / Σ pop; "
+        "clusters = unserved cells grouped on a 1 km grid, ranked by population"
+    ),
+    crs="EPSG:32643 (UTM 43N) for distances; EPSG:4326 for display",
+    sources=["WorldPop 2020", "OTD Delhi bus (DTC)", "DMRC metro", "OpenCity/DataMeet wards"],
+    evidence="Estimated",
+    caveats=[
+        "Straight-line distance from each 100 m cell centre, not network/footpath walking distance.",
+        "Bus stops are de-duplicated physical stop locations (40 m clusters of boarding points).",
+        "Defaults 500 m bus / 800 m metro follow India's National TOD Policy (500–800 m influence zone).",
+    ],
+)
+
+
+# ---------------------------------------------------------------------------
 # get_route_coverage — route line + stops, colored by DMRC line identity
 # ---------------------------------------------------------------------------
 
@@ -663,6 +735,7 @@ FORMATTERS: dict[str, Callable[[dict, dict], list[PropusResult]]] = {
     "find_underserved_areas": format_find_underserved_areas,
     "get_ward_density_ranking": format_ward_density_ranking,
     "get_pop_walk_access": format_pop_walk_access,
+    "coverage_gap": format_coverage_gap,
     "compare_transit_access": format_compare_transit_access,
     "get_route_coverage": format_route_coverage,
     "get_metro_catchment": format_catchment,
@@ -676,6 +749,7 @@ METHODOLOGY: dict[str, Methodology] = {
     "get_metro_catchment": CATCHMENT_METHODOLOGY,
     "simulate_new_stop_catchment": CATCHMENT_METHODOLOGY,
     "get_pop_walk_access": WALK_ACCESS_METHODOLOGY,
+    "coverage_gap": COVERAGE_GAP_METHODOLOGY,
 }
 
 

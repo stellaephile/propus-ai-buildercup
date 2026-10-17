@@ -369,6 +369,12 @@ TOOL ROUTING:
   metro station; override either if the user names a distance, e.g. "within
   300m of a bus stop"). Do not confuse with get_metro_catchment/
   simulate_new_stop_catchment, which are for ONE station/point, not city-wide.
+- "What share / how many people live MORE THAN X m from transit", "who is
+  far from transit", "biggest areas without a metro within 1 km", "coverage
+  gaps" → coverage_gap(bus_radius_m=500, metro_radius_m=800, mode, top_n)
+  (mode='metro' with metro_radius_m=1000 for "no metro within 1 km"). Uses
+  WorldPop 100 m cells, so it is the finer-grained answer for population
+  BEYOND walking distance and for WHERE the gaps are.
 - "How far is [area] from metro?"      → get_ward_rs_profile(area_name)
 - "Tell me about [area]"               → get_ward_rs_profile(area_name)
 - "Compare [A] vs [B]"                 → compare_transit_access(A, B)
@@ -722,6 +728,53 @@ def get_pop_walk_access(bus_radius_m: int = 500, metro_radius_m: int = 800) -> d
         "ward_count": len(rows),
         "wards_ref": _stash_geometry(rows),
         "buffer_ref": _stash_geometry(buffer_geojson),
+    }
+
+
+COVERAGE_GAP_METHOD = (
+    "WorldPop 2020 100 m cells; straight-line distance to the nearest bus stop "
+    "location or metro station, EPSG:32643"
+)
+
+
+def coverage_gap(
+    bus_radius_m: int = 500,
+    metro_radius_m: int = 800,
+    mode: str = "any",
+    top_n: int = 10,
+) -> dict:
+    """How many people in Delhi live BEYOND walking distance of transit, and
+    WHERE the biggest gaps are. Use for "what share / how many people live more
+    than X m from a bus or metro stop", "who is far from transit", "biggest
+    areas without a metro station within 1 km", "transit coverage gaps".
+
+    Args:
+        bus_radius_m: Walk radius to a bus stop in metres (default 500,
+            clamped 200-1500).
+        metro_radius_m: Walk radius to a metro station in metres (default 800,
+            clamped 200-1500).
+        mode: 'any' (unserved = beyond BOTH radii), 'bus' (beyond the bus
+            radius) or 'metro' (beyond the metro radius).
+        top_n: Number of largest unserved 1 km clusters to return (1-25).
+
+    Returns:
+        total_population, unserved_population, unserved_share_pct and
+        top_gap_clusters (unserved_pop, avg_dist_m, lon, lat) — report only
+        these numbers, and always state the method line.
+    """
+    r = _q(
+        "SELECT fn_coverage_gap(:b, :m, :mode, :n) AS r",
+        {"b": bus_radius_m, "m": metro_radius_m, "mode": mode, "n": top_n},
+    )[0]["r"]
+    return {
+        "mode": r["mode"],
+        "bus_radius_m": r["bus_radius_m"],
+        "metro_radius_m": r["metro_radius_m"],
+        "total_population": r["total_population"],
+        "unserved_population": r["unserved_population"],
+        "unserved_share_pct": r["unserved_share_pct"],
+        "top_gap_clusters": r["clusters"],
+        "method": COVERAGE_GAP_METHOD,
     }
 
 
@@ -1196,6 +1249,7 @@ TOOLS = [
     find_underserved_areas,
     get_ward_density_ranking,
     get_pop_walk_access,
+    coverage_gap,
     get_route_coverage,
     compare_transit_access,
     get_metro_catchment,
@@ -1219,6 +1273,7 @@ SIMPLE_TOOLS = [
     find_underserved_areas,
     get_ward_density_ranking,
     get_pop_walk_access,
+    coverage_gap,
     compare_transit_access,
     get_metro_catchment,
     simulate_new_stop_catchment,
@@ -1252,6 +1307,9 @@ Routing:
   walking distance, CITY-WIDE → get_pop_walk_access (defaults 500m to a bus
   stop, 800m to a metro station; override if the user names a distance).
   Not the same as catchment around one station — that's get_metro_catchment.
+- people living MORE THAN X m from transit / far from transit / biggest
+  coverage gaps / areas with no metro within 1 km → coverage_gap (mode='any',
+  'bus' or 'metro'; e.g. metro_radius_m=1000, mode='metro')
 - compare ward A vs ward B           → compare_transit_access
 - catchment around a metro station   → get_metro_catchment (combined 500m + 800m rings)
 - new-stop scenario at a lon/lat     → simulate_new_stop_catchment (same combined rings)

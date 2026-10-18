@@ -620,7 +620,7 @@
           ]
         },
         "style": {
-          "fillToken": null,
+          "fillToken": "alert",
           "lineToken": null,
           "rampProperty": null,
           "colorProperty": null,

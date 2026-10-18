@@ -629,7 +629,9 @@ def format_stop_heat_exposure(response: dict, args: dict) -> list[PropusResult]:
     results.append(MapLayerResult(
         layer="points",
         geojson=fc,
-        style=MapStyleSpec(opacity=1),
+        # amber: every stop here is above the heat threshold — an alert data
+        # point (§3.4), drawn as a filled disc rather than the cyan cursor ring
+        style=MapStyleSpec(fillToken="alert", opacity=1),
         camera={"center": DELHI_CENTER, "zoom": 10},
         label=f"Busiest stops on the hottest surfaces ({mode})",
     ))

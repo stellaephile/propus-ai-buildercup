@@ -1307,20 +1307,35 @@ export const MapView = forwardRef<
                   stops) — a bright cyan cursor ring that reads on both basemaps,
                   with an `ink` centre dot that flips light/dark by theme so it
                   stays legible against the ring. Cyan, not amber: amber is the
-                  alert scalpel (§3.4) and must not double as a cursor. */}
+                  alert scalpel (§3.4) and must not double as a cursor.
+                  A point result that names a fillToken (hot stops → "alert")
+                  is data, not a cursor: a larger disc in that token with a
+                  sheet-coloured edge, so it separates from the navy clusters
+                  and metro glyphs underneath. */}
               <Layer
                 id={`res-${l.id}-circle`}
                 source={`res-${l.id}`}
                 type="circle"
                 filter={["==", ["geometry-type"], "Point"]}
-                paint={{
-                  "circle-radius": 6.5,
-                  "circle-color": palette.ink,
-                  "circle-stroke-color": palette.cursor,
-                  "circle-stroke-width": 4,
-                  "circle-opacity": l.opacity,
-                  "circle-stroke-opacity": l.opacity,
-                }}
+                paint={
+                  r.style.fillToken
+                    ? {
+                        "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 7, 14, 10] as unknown as number,
+                        "circle-color": fill,
+                        "circle-stroke-color": palette.sheet,
+                        "circle-stroke-width": 2.5,
+                        "circle-opacity": l.opacity,
+                        "circle-stroke-opacity": l.opacity,
+                      }
+                    : {
+                        "circle-radius": 6.5,
+                        "circle-color": palette.ink,
+                        "circle-stroke-color": palette.cursor,
+                        "circle-stroke-width": 4,
+                        "circle-opacity": l.opacity,
+                        "circle-stroke-opacity": l.opacity,
+                      }
+                }
               />
             </Source>
           );
